@@ -19,10 +19,10 @@ ENV PATH="/venv/bin:$PATH"
 RUN pip install --upgrade pip wheel setuptools \
     && pip install jupyterlab notebook tensorboard
 
-# Torch + Xformers (CUDA 12.1 wheels that exist on RunPod)
-RUN pip install torch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2 \
+# Torch + Xformers (CUDA 12.1 wheels that actually exist)
+RUN pip install torch==2.3.1+cu121 torchvision==0.18.1+cu121 torchaudio==2.3.1+cu121 \
     --index-url https://download.pytorch.org/whl/cu121 \
-    && pip install xformers==0.0.20
+    && pip install xformers==0.0.27
 
 # Common AI + web deps (pinned and compatible with Py3.10)
 RUN pip install \
