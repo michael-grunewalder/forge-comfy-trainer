@@ -43,3 +43,4 @@ jobs:
       - name: Verify pushed image
         run: |
           echo "Image pushed: ghcr.io/michael-grunewalder/forge-comfy-trainer:latest"
+  # I am adding a comment to trigger this shit
