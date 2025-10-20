@@ -21,7 +21,9 @@ RUN pip install jupyterlab notebook tensorboard
 # ---------- Clone Forge ----------
 RUN git clone https://github.com/lllyasviel/stable-diffusion-webui-forge.git forge
 WORKDIR /workspace/forge
-RUN pip install -r requirements.txt && pip install xformers==0.0.27 triton==2.3.0
+RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 \
+    && pip install gradio fastapi uvicorn gfpgan realesrgan basicsr numpy Pillow \
+    && pip install xformers==0.0.27 triton==2.3.0
 
 # ---------- Clone ComfyUI ----------
 WORKDIR /workspace
