@@ -1,6 +1,6 @@
-# Use a currently available base image from RunPod for GPU workloads
-# Changed tag from 2.2.0 to a more stable/available 2.3.0 tag to fix 'not found' error.
-FROM runpod/pytorch:2.3.0-py3.10-cuda12.1.2-devel
+# Use a currently available base image from RunPod for GPU workloads.
+# The previous tags (2.2.0, 2.3.0) were not found. Switching to a stable 1.0.2 tag.
+FROM runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404
 
 # --- Environment Setup ---
 ENV DEBIAN_FRONTEND=noninteractive
@@ -43,8 +43,10 @@ RUN echo "Installing Python dependencies..." && \
     -r /workspace/kohya-ss/requirements.txt \
     # Ensure specific packages are installed/upgraded
     diffusers bitsandbytes accelerate torchvision safetensors xformers \
-    # Match torch version to the base image environment
-    && pip install --no-cache-dir torch==2.3.0+cu121 --extra-index-url https://download.pytorch.org/whl/cu121
+    # We remove the explicit torch install here because the base image already has PyTorch 2.8.0.
+    # The previous explicit install was causing potential conflicts or was unnecessary.
+    # If any conflicts arise, this line can be uncommented and adjusted:
+    # && pip install --no-cache-dir torch==2.8.0+cu121 --extra-index-url https://download.pytorch.org/whl/cu121
 
 # Copy the startup script into the container
 COPY start.sh /usr/local/bin/start.sh
@@ -52,4 +54,3 @@ RUN chmod +x /usr/local/bin/start.sh
 
 # Define the container entrypoint
 ENTRYPOINT ["/usr/local/bin/start.sh"]
-# Let us hope it works
