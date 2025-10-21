@@ -52,3 +52,4 @@ RUN chmod +x /usr/local/bin/start.sh
 
 # Define the container entrypoint
 ENTRYPOINT ["/usr/local/bin/start.sh"]
+# Let us hope it works
