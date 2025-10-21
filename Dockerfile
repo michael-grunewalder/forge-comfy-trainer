@@ -56,6 +56,10 @@ RUN pip install --no-cache-dir \
     svglib\
     tensorboard==2.17.1 || true
 
+RUN apt-get update && apt-get install -y --no-install-recommends bash libncurses5 && \
+    pip install terminado==0.18.0 && \
+    rm -rf /var/lib/apt/lists/*
+
 # --- Handle bitsandbytes separately (binary wheel only) ---
 RUN pip install --no-cache-dir --prefer-binary bitsandbytes==0.45.3 || \
     (echo "⚠️ bitsandbytes build failed; falling back to CPU-only mode" && true)
