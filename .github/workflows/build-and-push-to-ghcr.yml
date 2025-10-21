@@ -21,10 +21,14 @@ jobs:
       # 💥 CRITICAL STEP 1: MAXIMIZE FREE DISK SPACE 💥
       # This removes large, unnecessary toolchains (like Android/DotNet SDKs) 
       # and ensures ~40GB of free space for the large base image pull and build.
-      - name: 🗑️ Maximize Build Space for Large Image
+      - name: Maximize build space
         uses: easimon/maximize-build-space@master
         with:
-          root-reserve-mb: 40000 # Reserve 40GB for the Docker build
+          # **Crucial Change:** Reduce the Root Reserve from 40000 to a safe value
+          root-reserve-mb: '5000' # Leaves 5GB (5000MiB) free on the root FS
+          temp-reserve-mb: '100'
+          swap-size-mb: '4096'
+          # Removal arguments...
           remove-dotnet: 'true'
           remove-android: 'true'
           remove-haskell: 'true'
