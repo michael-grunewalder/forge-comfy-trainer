@@ -1,16 +1,17 @@
 {
-  "id": "forge-comfy-trainer-lab",
-  "name": "Forge + ComfyUI + Trainer + JupyterLab",
-  "description": "Stable Diffusion stack with Forge, ComfyUI, kohya_ss, and JupyterLab. All apps share /workspace/shared/{models,outputs,notebooks,logs}.",
-  "image_name": "ghcr.io/michael-grunewalder/forge-comfy-trainer:latest",
-  "default_volume_path": "/workspace",
-  "volume_mount_path": "/workspace",
-  "gpu_type": "NVIDIA",
+  "name": "Bearny#s AI Lab",
+  "image_name": "ghcr.io/michael-grunewalder/bearnys-ai-lab:latest",
+  "containerDiskGB": 20,
+  "volumeInGB": 50,
+  "volumeMountPath": "/workspace",
   "ports": [
-    { "container_port": 7860, "host_port": 7860, "protocol": "http", "description": "Forge UI" },
-    { "container_port": 8188, "host_port": 8188, "protocol": "http", "description": "ComfyUI" },
-    { "container_port": 8888, "host_port": 8888, "protocol": "http", "description": "JupyterLab" }
+    { "containerPort": 7860, "hostPort": 7860, "protocol": "tcp", "httpProxy": true, "path": "/" },
+    { "containerPort": 8188, "hostPort": 8188, "protocol": "tcp", "httpProxy": true, "path": "/" },
+    { "containerPort": 8888, "hostPort": 8888, "protocol": "tcp", "httpProxy": true, "path": "/" }
   ],
-  "start_script": "/opt/start.sh",
-  "tags": ["stable-diffusion", "training", "comfyui", "forge", "kohya", "jupyter"]
+  "env": [
+    { "key": "PYTHONUNBUFFERED", "value": "1" }
+  ],
+  "gpuTypeId": "NVIDIA",
+  "startCommand": "/opt/start.sh"
 }

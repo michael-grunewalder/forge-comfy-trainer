@@ -1,70 +1,100 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
-echo "Starting Bearny's AI Lab Container Orchestrator..."
+# Make sure shared dirs exist even if /workspace is a fresh volume
+mkdir -p /workspace/shared/{models,outputs,logs,datasets,checkpoints}
+mkdir -p /workspace/shared/models/{checkpoints,loras,vae,clip,clip_vision,controlnet,upscale_models,embeddings}
+mkdir -p /workspace/shared/outputs/{forge,comfyui,kohya}
+mkdir -p /workspace/shared/logs/{forge,comfyui,jupyter,kohya}
+mkdir -p /workspace/notebooks
 
-# --- Configuration & Setup ---
+# Helpful env
+export HF_HOME=/workspace/shared/huggingface
+export PYTHONUNBUFFERED=1
 
-# Define directory for large models (often mounted to a persistent volume)
-MODEL_DIR="/workspace/models"
-REQUIRED_MODEL="stable-diffusion-v1-5.ckpt"
+# ---- Symlinks so everyone shares the same asset folders ----
 
-mkdir -p "$MODEL_DIR"
-
-# Check for model download (moved to runtime to prevent Docker build size issues)
-if [ ! -f "$MODEL_DIR/$REQUIRED_MODEL" ]; then
-    echo "Model $REQUIRED_MODEL not found. Initiating required download..."
-    # Placeholder: Replace with actual download command (e.g., curl, huggingface-cli, wget)
-    # The actual installation of these models (ComfyUI checkpoints, etc.) would be here.
-    echo "Executing model download script..."
-    # Example: python3 /workspace/app/scripts/download_models.py
-    touch "$MODEL_DIR/$REQUIRED_MODEL" # Creates dummy file for testing flow
-    echo "Model readiness check complete."
-else
-    echo "Required model found: $REQUIRED_MODEL"
+# Forge
+if [ ! -L /opt/forge/models/Stable-diffusion ]; then
+  mkdir -p /opt/forge/models
+  ln -sf /workspace/shared/models/checkpoints /opt/forge/models/Stable-diffusion
 fi
+ln -sf /workspace/shared/models/vae        /opt/forge/models/VAE
+ln -sf /workspace/shared/models/loras      /opt/forge/models/Lora
+# (optional) embeddings
+mkdir -p /opt/forge/embeddings
+ln -sf /workspace/shared/models/embeddings /opt/forge/embeddings
+# outputs
+rm -rf /opt/forge/outputs
+ln -sf /workspace/shared/outputs/forge /opt/forge/outputs
 
-# --- Application Service Launcher ---
+# ComfyUI
+mkdir -p /opt/ComfyUI/models
+ln -sf /workspace/shared/models/checkpoints   /opt/ComfyUI/models/checkpoints
+ln -sf /workspace/shared/models/loras         /opt/ComfyUI/models/loras
+ln -sf /workspace/shared/models/vae           /opt/ComfyUI/models/vae
+ln -sf /workspace/shared/models/clip          /opt/ComfyUI/models/clip
+ln -sf /workspace/shared/models/clip_vision   /opt/ComfyUI/models/clip_vision
+ln -sf /workspace/shared/models/controlnet    /opt/ComfyUI/models/controlnet
+ln -sf /workspace/shared/models/upscale_models /opt/ComfyUI/models/upscale_models
+ln -sf /workspace/shared/models/embeddings    /opt/ComfyUI/models/embeddings
+rm -rf /opt/ComfyUI/output
+ln -sf /workspace/shared/outputs/comfyui /opt/ComfyUI/output
 
-# The environment variable SERVICE_TO_RUN dictates which application starts.
-# This variable is typically set by the user or the hosting platform (e.g., RunPod).
-SERVICE_TO_RUN=${SERVICE_TO_RUN:-"JUPYTER"} # Default to Jupyter if not specified
+# kohya_ss will consume whatever paths you pass; use shared datasets/outputs by convention
+mkdir -p /workspace/shared/datasets /workspace/shared/checkpoints /workspace/shared/outputs/kohya
 
-echo "SERVICE_TO_RUN is set to: $SERVICE_TO_RUN"
+# ---- Launch services ----
 
-case "$SERVICE_TO_RUN" in
+# 1) Forge (A1111/Forge) on 7860
+(
+  cd /opt/forge
+  # launcher args tuned for CUDA 12.1 wheels; --xformers enables memory-efficient attention
+  # --api set for programmatic access; skip version checks to reduce noise
+  python launch.py \
+    --listen 0.0.0.0 \
+    --port 7860 \
+    --xformers \
+    --api \
+    --skip-version-check \
+    --disable-nan-check \
+    --gradio-queue \
+    --no-half-vae \
+  2>&1 | tee -a /workspace/shared/logs/forge/forge.log
+) &
 
-    # 1. ComfyUI (Node-based workflow UI)
-    "COMFYUI")
-        echo "Launching ComfyUI..."
-        # Assuming ComfyUI is installed and runs via a Python script
-        exec python3 /workspace/ComfyUI/main.py --listen 0.0.0.0 --port 3000
-        ;;
+# 2) ComfyUI on 8188
+(
+  cd /opt/ComfyUI
+  python main.py --listen 0.0.0.0 --port 8188 \
+  2>&1 | tee -a /workspace/shared/logs/comfyui/comfyui.log
+) &
 
-    # 2. Forge/Stable Diffusion WebUI (General purpose UI)
-    "FORGE"|"WEBUI")
-        echo "Launching Stable Diffusion WebUI (Forge/A1111/Fooocus)..."
-        # Assuming the webui is installed and launched via its standard script
-        exec python3 /workspace/webui/launch.py --listen --port 3000 --xformers
-        ;;
+# 3) JupyterLab on 8888 (no token, runs in /workspace)
+(
+  cd /workspace
+  jupyter lab \
+    --ip=0.0.0.0 \
+    --port=8888 \
+    --no-browser \
+    --ServerApp.token='' \
+    --ServerApp.password='' \
+    --NotebookApp.default_url='/lab' \
+  2>&1 | tee -a /workspace/shared/logs/jupyter/jupyter.log
+) &
 
-    # 3. Training Tool (e.g., Kohya-SS or custom script)
-    "TRAINING")
-        echo "Launching Training Environment (e.g., Kohya-SS or a custom training script)..."
-        # This typically launches a specialized Python script or a web UI for training.
-        exec python3 /workspace/training/launch_kohya.py --listen 0.0.0.0 --port 3001
-        ;;
+# Optional: TensorBoard (commented; uncomment if you want port 6006)
+# (
+#   mkdir -p /workspace/shared/logs/tensorboard
+#   tensorboard --logdir /workspace/shared/logs/tensorboard --host 0.0.0.0 --port 6006 \
+#   2>&1 | tee -a /workspace/shared/logs/jupyter/tensorboard.log
+# ) &
 
-    # 4. Jupyter Lab (Interactive Notebooks/Development Environment) - Default
-    "JUPYTER"|*)
-        echo "Launching Jupyter Lab (Interactive Development)..."
-        # Assuming Jupyter is installed on the base RunPod image
-        # Launches Jupyter with passwordless access on a specified port
-        exec jupyter lab --ip=0.0.0.0 --port=8888 --allow-root --no-browser --NotebookApp.token=''
-        ;;
-esac
-
-# If 'exec' fails or the application exits, the container will stop.
-# If a restart loop is needed, it would be added here, but 'exec' is preferred.
-
-echo "Service finished execution."
+# Keep container alive; show combined logs tail
+sleep 2
+echo "Forge:     http://localhost:7860"
+echo "ComfyUI:   http://localhost:8188"
+echo "Jupyter:   http://localhost:8888"
+tail -F /workspace/shared/logs/forge/forge.log \
+       /workspace/shared/logs/comfyui/comfyui.log \
+       /workspace/shared/logs/jupyter/jupyter.log

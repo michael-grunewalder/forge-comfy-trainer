@@ -1,37 +1,88 @@
-# Use the mandatory large PyTorch base image
-FROM runpod/pytorch:1.0.2-cu1281-torch271-ubuntu2204
+# Minimal, CUDA 12.1 via PyTorch wheels (no heavy nvidia/cuda base)
+FROM python:3.10-slim
 
-# Set a non-root working directory for security
-WORKDIR /workspace/app
+ENV DEBIAN_FRONTEND=noninteractive \
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONUNBUFFERED=1 \
+    VIRTUAL_ENV=/opt/venv \
+    PATH=/opt/venv/bin:$PATH \
+    HF_HOME=/workspace/shared/huggingface
 
-# Set environment variables (common for ML/RunPod environments)
-ENV PYTHONUNBUFFERED=1
+# System deps: git/LFS, ffmpeg, GL stack, cairo stack, build tools for any wheels that need compiling
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git git-lfs curl wget ca-certificates \
+    ffmpeg \
+    build-essential pkg-config \
+    libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 \
+    libcairo2 libpango-1.0-0 libpangocairo-1.0-0 \
+    libfontconfig1 libfreetype6 libjpeg62-turbo zlib1g \
+    libsndfile1 \
+ && rm -rf /var/lib/apt/lists/* \
+ && git lfs install
 
-# Copy the startup script and your application code
-# Assuming your main application logic is in a folder named 'src'
-COPY start.sh .
-COPY src/ /workspace/app/src/
+# Create workspace/shared structure now (RunPod volume will overlay /workspace; script re-mkdirs on boot)
+RUN mkdir -p /workspace/shared/{models,outputs,logs,datasets,checkpoints} \
+    /workspace/shared/models/{checkpoints,loras,vae,clip,clip_vision,controlnet,upscale_models,embeddings} \
+    /workspace/shared/outputs/{forge,comfyui,kohya} \
+    /workspace/shared/logs/{forge,comfyui,jupyter,kohya}
 
-# Install any additional system dependencies needed for your specific application.
-# CRITICAL OPTIMIZATION: Combine RUN commands using '&&' and clean the apt cache 
-# in the *same layer* to prevent temporary files from bloating the image history.
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    # Example: add necessary tools like git or nano if your app needs them
-    git \
-    nano \
-    # Cleanup step is mandatory in the same RUN block
-    && rm -rf /var/lib/apt/lists/*
+WORKDIR /opt
 
-# Install Python dependencies (use --no-cache-dir to save space)
-# Example: replace requirements.txt with your actual requirements file
-COPY requirements.txt .
-RUN pip install --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+# Clone apps (shallow)
+RUN git clone --depth=1 https://github.com/lllyasviel/stable-diffusion-webui-forge.git forge && \
+    git clone --depth=1 https://github.com/comfyanonymous/ComfyUI.git ComfyUI && \
+    git clone --depth=1 https://github.com/bmaltais/kohya_ss.git kohya_ss
 
-# Mark port 3000 as exposed (common for web UIs like ComfyUI/webui, change if needed)
-EXPOSE 3000
+# Single venv for all tools
+RUN python -m venv /opt/venv && \
+    /opt/venv/bin/pip install --upgrade pip setuptools wheel
 
-# Set the entrypoint to the startup script
-# This script will handle model downloading, environment checks, and finally launch the app
-ENTRYPOINT ["/bin/bash", "start.sh"]
+# Install CUDA 12.1 PyTorch/XFormers wheels
+# (Pinned to recent torch; adjust if RunPod image changes)
+RUN pip install --index-url https://download.pytorch.org/whl/cu121 \
+    torch==2.4.1+cu121 torchvision==0.19.1+cu121 torchaudio==2.4.1+cu121 \
+    xformers==0.0.27.post2+cu121
+
+# Common Python deps (covers Forge/Comfy/kohya needs + Jupyter/TensorBoard)
+RUN pip install \
+    fastapi uvicorn \
+    einops \
+    opencv-python \
+    safetensors \
+    transformers \
+    accelerate==0.33.0 \
+    bitsandbytes==0.43.3 \
+    pycairo \
+    pillow==10.2.0 \
+    tqdm \
+    jupyterlab==4.2.5 \
+    tensorboard==2.17.1
+
+# Project requirements (pinned where provided)
+# Forge tends to work best with requirements_versions.txt; fall back to requirements.txt if it changes upstream.
+RUN if [ -f /opt/forge/requirements_versions.txt ]; then \
+        pip install -r /opt/forge/requirements_versions.txt || true ; \
+    elif [ -f /opt/forge/requirements.txt ]; then \
+        pip install -r /opt/forge/requirements.txt || true ; \
+    fi
+
+RUN if [ -f /opt/ComfyUI/requirements.txt ]; then \
+        pip install -r /opt/ComfyUI/requirements.txt || true ; \
+    fi
+
+RUN if [ -f /opt/kohya_ss/requirements.txt ]; then \
+        pip install -r /opt/kohya_ss/requirements.txt || true ; \
+    fi
+
+# Make sure the app outputs go to shared paths by default
+RUN mkdir -p /opt/forge/models /opt/forge/outputs \
+             /opt/ComfyUI/models /opt/ComfyUI/output
+
+# Ports
+EXPOSE 7860 8188 8888
+
+# Start script
+COPY start.sh /opt/start.sh
+RUN chmod +x /opt/start.sh
+
+CMD ["/opt/start.sh"]
