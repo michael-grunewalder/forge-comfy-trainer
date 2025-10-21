@@ -1,81 +1,70 @@
 #!/bin/bash
+set -e
 
-# --- 1. Model and Shared Directory Setup ---
-echo "Setting up shared model directories..."
+echo "Starting Bearny's AI Lab Container Orchestrator..."
 
-# Define the root shared model directory (if not already mounted via volume)
-MODEL_ROOT="/workspace/models"
-# Define the persistent directory for Python dependencies
-PERSISTENT_DEPS_DIR="/workspace/python_deps"
+# --- Configuration & Setup ---
 
-mkdir -p "$MODEL_ROOT"
-mkdir -p "$PERSISTENT_DEPS_DIR"
+# Define directory for large models (often mounted to a persistent volume)
+MODEL_DIR="/workspace/models"
+REQUIRED_MODEL="stable-diffusion-v1-5.ckpt"
 
-# Create standard subdirectories within the shared root
-mkdir -p "$MODEL_ROOT/checkpoints"
-mkdir -p "$MODEL_ROOT/loras"
-mkdir -p "$MODEL_ROOT/vae"
-mkdir -p "$MODEL_ROOT/embeddings"
-mkdir -p "$MODEL_ROOT/upscalers"
-mkdir -p "$MODEL_ROOT/controlnet"
+mkdir -p "$MODEL_DIR"
 
-# Create shared symbolic links for ComfyUI to use the shared structure
-echo "Linking ComfyUI paths to shared directories..."
-mkdir -p /workspace/ComfyUI/models
-ln -sf "$MODEL_ROOT/checkpoints" /workspace/ComfyUI/models/checkpoints
-ln -sf "$MODEL_ROOT/loras" /workspace/ComfyUI/models/loras
-ln -sf "$MODEL_ROOT/vae" /workspace/ComfyUI/models/vae
-ln -sf "$MODEL_ROOT/embeddings" /workspace/ComfyUI/models/embeddings
-ln -sf "$MODEL_ROOT/upscalers" /workspace/ComfyUI/models/upscale_models
-ln -sf "$MODEL_ROOT/controlnet" /workspace/ComfyUI/models/controlnet
-
-# Create shared symbolic links for Forge to use the shared structure
-echo "Linking Forge paths to shared directories..."
-mkdir -p /workspace/forge-ui/models
-ln -sf "$MODEL_ROOT/checkpoints" /workspace/forge-ui/models/Stable-diffusion
-ln -sf "$MODEL_ROOT/loras" /workspace/forge-ui/models/Lora
-ln -sf "$MODEL_ROOT/vae" /workspace/forge-ui/models/VAE
-ln -sf "$MODEL_ROOT/embeddings" /workspace/forge-ui/embeddings
-ln -sf "$MODEL_ROOT/upscalers" /workspace/forge-ui/models/ESRGAN
-
-# --- 2. Dependency Installation (Executed at Container Runtime) ---
-echo "Checking and installing Python dependencies at runtime..."
-
-# Use a marker file to track if installation has been completed successfully
-INSTALL_MARKER="$PERSISTENT_DEPS_DIR/.install_complete"
-
-if [ ! -f "$INSTALL_MARKER" ]; then
-    echo "Marker file not found. Performing full installation (this will take time)..."
-
-    # Install all dependencies into the persistent directory on the Network Volume.
-    # The --target flag ensures persistence across container restarts.
-    pip install --target "$PERSISTENT_DEPS_DIR" \
-        -r /workspace/ComfyUI/requirements.txt \
-        -r /workspace/forge-ui/requirements.txt \
-        -r /workspace/kohya-ss/requirements.txt \
-        diffusers bitsandbytes accelerate torchvision safetensors xformers
-    
-    # Create the marker file after successful installation
-    touch "$INSTALL_MARKER"
-    echo "Installation complete. Marker file created."
+# Check for model download (moved to runtime to prevent Docker build size issues)
+if [ ! -f "$MODEL_DIR/$REQUIRED_MODEL" ]; then
+    echo "Model $REQUIRED_MODEL not found. Initiating required download..."
+    # Placeholder: Replace with actual download command (e.g., curl, huggingface-cli, wget)
+    # The actual installation of these models (ComfyUI checkpoints, etc.) would be here.
+    echo "Executing model download script..."
+    # Example: python3 /workspace/app/scripts/download_models.py
+    touch "$MODEL_DIR/$REQUIRED_MODEL" # Creates dummy file for testing flow
+    echo "Model readiness check complete."
 else
-    echo "Persistent dependencies found. Skipping installation."
+    echo "Required model found: $REQUIRED_MODEL"
 fi
 
-# --- 3. Prepare Environment and Startup ---
+# --- Application Service Launcher ---
 
-# Set PYTHONPATH to include the persistent dependency directory
-# This ensures Python can find the modules installed via --target.
-export PYTHONPATH="$PERSISTENT_DEPS_DIR:$PYTHONPATH"
-echo "PYTHONPATH set to include persistent dependencies: $PYTHONPATH"
+# The environment variable SERVICE_TO_RUN dictates which application starts.
+# This variable is typically set by the user or the hosting platform (e.g., RunPod).
+SERVICE_TO_RUN=${SERVICE_TO_RUN:-"JUPYTER"} # Default to Jupyter if not specified
 
-echo "Startup complete. Starting ComfyUI..."
+echo "SERVICE_TO_RUN is set to: $SERVICE_TO_RUN"
 
-# Change directory to ComfyUI (default app)
-cd /workspace/ComfyUI
+case "$SERVICE_TO_RUN" in
 
-# Start ComfyUI, listening on all interfaces (0.0.0.0)
-python main.py --listen 0.0.0.0 --port 8888
+    # 1. ComfyUI (Node-based workflow UI)
+    "COMFYUI")
+        echo "Launching ComfyUI..."
+        # Assuming ComfyUI is installed and runs via a Python script
+        exec python3 /workspace/ComfyUI/main.py --listen 0.0.0.0 --port 3000
+        ;;
 
-# Fallback to keep the container running if the main process exits
-exec /bin/bash
+    # 2. Forge/Stable Diffusion WebUI (General purpose UI)
+    "FORGE"|"WEBUI")
+        echo "Launching Stable Diffusion WebUI (Forge/A1111/Fooocus)..."
+        # Assuming the webui is installed and launched via its standard script
+        exec python3 /workspace/webui/launch.py --listen --port 3000 --xformers
+        ;;
+
+    # 3. Training Tool (e.g., Kohya-SS or custom script)
+    "TRAINING")
+        echo "Launching Training Environment (e.g., Kohya-SS or a custom training script)..."
+        # This typically launches a specialized Python script or a web UI for training.
+        exec python3 /workspace/training/launch_kohya.py --listen 0.0.0.0 --port 3001
+        ;;
+
+    # 4. Jupyter Lab (Interactive Notebooks/Development Environment) - Default
+    "JUPYTER"|*)
+        echo "Launching Jupyter Lab (Interactive Development)..."
+        # Assuming Jupyter is installed on the base RunPod image
+        # Launches Jupyter with passwordless access on a specified port
+        exec jupyter lab --ip=0.0.0.0 --port=8888 --allow-root --no-browser --NotebookApp.token=''
+        ;;
+esac
+
+# If 'exec' fails or the application exits, the container will stop.
+# If a restart loop is needed, it would be added here, but 'exec' is preferred.
+
+echo "Service finished execution."

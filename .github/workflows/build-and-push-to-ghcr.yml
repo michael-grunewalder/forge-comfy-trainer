@@ -14,23 +14,37 @@ jobs:
       packages: write
 
     steps:
-      - name: Checkout repository
+      - name: 📦 Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up QEMU (for multi-arch builds, optional)
+      # -----------------------------------------------------------------
+      # 💥 CRITICAL STEP 1: MAXIMIZE FREE DISK SPACE 💥
+      # This removes large, unnecessary toolchains (like Android/DotNet SDKs) 
+      # and ensures ~40GB of free space for the large base image pull and build.
+      - name: 🗑️ Maximize Build Space for Large Image
+        uses: easimon/maximize-build-space@master
+        with:
+          root-reserve-mb: 40000 # Reserve 40GB for the Docker build
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+          remove-codeql: 'true'
+      # -----------------------------------------------------------------
+
+      - name: 🏗️ Set up QEMU (for multi-arch builds, optional)
         uses: docker/setup-qemu-action@v3
 
-      - name: Set up Docker Buildx
+      - name: 🛠️ Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to GHCR
+      - name: 🔑 Login to GHCR
         uses: docker/login-action@v2
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GHCR_PAT }}
 
-      - name: Build and push
+      - name: 🐳 Build and Push Image (with GHA Caching)
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -38,8 +52,14 @@ jobs:
           push: true
           tags: ghcr.io/michael-grunewalder/bearnys-ai-lab:latest
           platforms: linux/amd64
-          # if you want cache across runs, you can add cache-from/cache-to steps
+          # -----------------------------------------------------------------
+          # ⚡ CRITICAL STEP 2: ENABLE CACHING
+          # cache-from: Load previous layers, preventing re-download of the 9.8GB base image.
+          # cache-to: Save new layers for the next build.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max 
+          # -----------------------------------------------------------------
 
-      - name: Verify pushed image
+      - name: ✅ Verify pushed image
         run: |
           echo "Image pushed: ghcr.io/michael-grunewalder/bearnys-ai-lab:latest"

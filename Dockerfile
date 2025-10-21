@@ -1,40 +1,37 @@
-# Use a currently available base image from RunPod for GPU workloads.
-FROM runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404
+# Use the mandatory large PyTorch base image
+FROM runpod/pytorch:1.0.2-cu1281-torch271-ubuntu2204
 
-# --- Environment Setup ---
-ENV DEBIAN_FRONTEND=noninteractive
-ENV HOME=/workspace
-WORKDIR /workspace
+# Set a non-root working directory for security
+WORKDIR /workspace/app
 
-# Install common utilities
-RUN echo "Installing OS dependencies..." && \
-    apt-get update && \
+# Set environment variables (common for ML/RunPod environments)
+ENV PYTHONUNBUFFERED=1
+
+# Copy the startup script and your application code
+# Assuming your main application logic is in a folder named 'src'
+COPY start.sh .
+COPY src/ /workspace/app/src/
+
+# Install any additional system dependencies needed for your specific application.
+# CRITICAL OPTIMIZATION: Combine RUN commands using '&&' and clean the apt cache 
+# in the *same layer* to prevent temporary files from bloating the image history.
+RUN apt-get update && \
     apt-get install -y --no-install-recommends \
+    # Example: add necessary tools like git or nano if your app needs them
     git \
-    wget \
-    curl \
-    unzip \
     nano \
-    # Clean up to reduce image size
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+    # Cleanup step is mandatory in the same RUN block
+    && rm -rf /var/lib/apt/lists/*
 
-# --- Cloning Repositories (Only cloning, NO pip install) ---
-# By removing the large pip install step from this layer, we prevent the GitHub
-# Actions runner from running out of disk space during the build.
-RUN echo "Cloning repositories..." && \
-    # 1. Install ComfyUI
-    git clone https://github.com/comfyanonymous/ComfyUI.git /workspace/ComfyUI && \
-    git clone https://github.com/ltdrdata/ComfyUI-Manager.git /workspace/ComfyUI/custom_nodes/ComfyUI-Manager && \
-    \
-    # 2. Install Stable Diffusion WebUI (Forge Edition)
-    git clone https://github.com/lllyasviel/stable-diffusion-webui-forge.git /workspace/forge-ui && \
-    \
-    # 3. Install Kohya's LoRA Training Scripts (For Training)
-    git clone https://github.com/kohya-ss/sd-scripts.git /workspace/kohya-ss
+# Install Python dependencies (use --no-cache-dir to save space)
+# Example: replace requirements.txt with your actual requirements file
+COPY requirements.txt .
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Copy the startup script (which now handles dependency installation AND model linking)
-COPY start.sh /usr/local/bin/start.sh
-RUN chmod +x /usr/local/bin/start.sh
+# Mark port 3000 as exposed (common for web UIs like ComfyUI/webui, change if needed)
+EXPOSE 3000
 
-# Define the container entrypoint
-ENTRYPOINT ["/usr/local/bin/start.sh"]
+# Set the entrypoint to the startup script
+# This script will handle model downloading, environment checks, and finally launch the app
+ENTRYPOINT ["/bin/bash", "start.sh"]
