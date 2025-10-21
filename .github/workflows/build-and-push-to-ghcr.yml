@@ -36,11 +36,10 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          tags: ghcr.io/michael-grunewalder/forge-comfy-trainer:latest
+          tags: ghcr.io/michael-grunewalder/bearnys-ai-lab:latest
           platforms: linux/amd64
           # if you want cache across runs, you can add cache-from/cache-to steps
 
       - name: Verify pushed image
         run: |
-          echo "Image pushed: ghcr.io/michael-grunewalder/forge-comfy-trainer:latest"
-  # I am adding a comment to trigger this shit
+          echo "Image pushed: ghcr.io/michael-grunewalder/bearnys-ai-lab:latest"
