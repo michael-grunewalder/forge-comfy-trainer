@@ -49,10 +49,15 @@ RUN pip install --no-cache-dir \
     pillow==10.2.0 \
     tqdm \
     jupyterlab==4.2.5 \
+    insightface \
+    onnxruntime \
+    mediapipe \
+    fvcore \
+    svglib\
     tensorboard==2.17.1 || true
 
 # --- Handle bitsandbytes separately (binary wheel only) ---
-RUN pip install --no-cache-dir --prefer-binary bitsandbytes==0.43.3 || \
+RUN pip install --no-cache-dir --prefer-binary bitsandbytes==0.45.3 || \
     (echo "⚠️ bitsandbytes build failed; falling back to CPU-only mode" && true)
 
 # --- Handle pycairo with headers now available ---

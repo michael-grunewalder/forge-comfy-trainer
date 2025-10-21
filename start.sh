@@ -52,14 +52,15 @@ mkdir -p /workspace/shared/datasets /workspace/shared/checkpoints /workspace/sha
   # launcher args tuned for CUDA 12.1 wheels; --xformers enables memory-efficient attention
   # --api set for programmatic access; skip version checks to reduce noise
   python launch.py \
-    --listen 0.0.0.0 \
-    --port 7860 \
-    --xformers \
-    --api \
-    --skip-version-check \
-    --disable-nan-check \
-    --gradio-queue \
-    --no-half-vae \
+  --listen \
+  --server-name 0.0.0.0 \
+  --port 7860 \
+  --xformers \
+  --api \
+  --skip-version-check \
+  --disable-nan-check \
+  --gradio-queue \
+  --no-half-vae \
   2>&1 | tee -a /workspace/shared/logs/forge/forge.log
 ) &
 
@@ -73,13 +74,9 @@ mkdir -p /workspace/shared/datasets /workspace/shared/checkpoints /workspace/sha
 # 3) JupyterLab on 8888 (no token, runs in /workspace)
 (
   cd /workspace
-  jupyter lab \
-    --ip=0.0.0.0 \
-    --port=8888 \
-    --no-browser \
-    --ServerApp.token='' \
-    --ServerApp.password='' \
-    --NotebookApp.default_url='/lab' \
+  jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root \
+  --ServerApp.token='' --ServerApp.password='' \
+  --NotebookApp.default_url='/lab' \
   2>&1 | tee -a /workspace/shared/logs/jupyter/jupyter.log
 ) &
 
