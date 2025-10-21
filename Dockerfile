@@ -40,8 +40,8 @@ RUN python -m venv /opt/venv && \
 # Install CUDA 12.1 PyTorch/XFormers wheels
 # (Pinned to recent torch; adjust if RunPod image changes)
 RUN pip install --index-url https://download.pytorch.org/whl/cu121 \
-    torch==2.4.1+cu121 torchvision==0.19.1+cu121 torchaudio==2.4.1+cu121 \
-    xformers==0.0.27.post2+cu121
+    torch==2.4.1+cu121 torchvision==0.19.1+cu121 torchaudio==2.4.1+cu121 && \
+    pip install xformers==0.0.27.post2
 
 # Common Python deps (covers Forge/Comfy/kohya needs + Jupyter/TensorBoard)
 RUN pip install \
