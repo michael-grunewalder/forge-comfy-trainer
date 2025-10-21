@@ -56,7 +56,8 @@ RUN pip install --no-cache-dir \
     svglib\
     tensorboard==2.17.1 || true
 
-RUN apt-get update && apt-get install -y --no-install-recommends bash libncurses5 && \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        bash libncurses6 libtinfo6 && \
     pip install terminado==0.18.0 && \
     rm -rf /var/lib/apt/lists/*
 
