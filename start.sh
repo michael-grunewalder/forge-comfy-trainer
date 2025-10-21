@@ -10,11 +10,11 @@ ln -sf /workspace/models /workspace/comfyui/models
 ln -sf /workspace/models /workspace/train/models
 
 # Optional model preload
-if [ ! -f /workspace/models/sd_xl_base_1.0.safetensors ]; then
-    echo "Downloading SDXL base model..."
-    wget -q -O /workspace/models/sd_xl_base_1.0.safetensors \
-        "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0.safetensors?download=true"
-fi
+#if [ ! -f /workspace/models/sd_xl_base_1.0.safetensors ]; then
+#    echo "Downloading SDXL base model..."
+#    wget -q -O /workspace/models/sd_xl_base_1.0.safetensors \
+#        "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0.safetensors?download=true"
+#fi
 
 # Forge
 if [ -d /workspace/forge ]; then
