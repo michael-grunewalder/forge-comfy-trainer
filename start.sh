@@ -117,13 +117,19 @@ start_bg forge "$PYTHON" "$FORGE_PATH/launch.py" \
 start_bg comfyui "$PYTHON" "$COMFY_PATH/main.py" \
   --listen 0.0.0.0 --port "$COMFY_PORT"
 
-ensure_dir "$TRAIN_PATH/logs"
-start_bg tensorboard "$TB_BIN" \
-  --logdir "$TRAIN_PATH/logs" --host 0.0.0.0 --port "$TB_PORT"
+###ensure_dir "$TRAIN_PATH/logs"
+###start_bg tensorboard "$TB_BIN" \
+###  --logdir "$TRAIN_PATH/logs" --host 0.0.0.0 --port "$TB_PORT"
 
 start_bg jupyter "$JUP_BIN" lab \
-  --ip=0.0.0.0 --port "$JUPYTER_PORT" --no-browser --allow-root \
-  --NotebookApp.token="$JUPYTER_TOKEN" --notebook-dir="$SHARED_NOTEBOOKS"
+  --ip=0.0.0.0 \
+  --port="$JUPYTER_PORT" \
+  --no-browser \
+  --allow-root \
+  --NotebookApp.token="$JUPYTER_TOKEN" \
+  --notebook-dir="$SHARED_NOTEBOOKS" \
+  --ServerApp.base_url="/" \
+  --ServerApp.allow_origin="*"
 
 ### ─── Status summary ────────────────────────────────────────────────────────
 log "────────────────────────────────────────────"

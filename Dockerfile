@@ -7,8 +7,12 @@ ENV JUPYTER_TOKEN=${JUPYTER_TOKEN}
 
 # System deps
 RUN apt-get update && apt-get install -y \
-    git wget curl python3 python3-pip python3-venv ffmpeg \
-    libgl1 libglib2.0-0 libssl-dev libstdc++6 libx11-6 libxext6 libsm6 libxrender1 \
+    pkg-config \
+    libcairo2-dev \
+    libpango1.0-dev \
+    libffi-dev \
+    libjpeg-dev \
+    libpng-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace
