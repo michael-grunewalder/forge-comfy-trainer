@@ -19,34 +19,30 @@ RUN echo "Installing OS dependencies..." && \
     # Clean up to reduce image size
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# --- 1. Install ComfyUI ---
-RUN echo "Installing ComfyUI..." && \
-    git clone https://github.com/comfyanonymous/ComfyUI.git /workspace/ComfyUI
-# Install ComfyUI Manager (highly recommended)
-RUN echo "Installing ComfyUI Manager..." && \
-    git clone https://github.com/ltdrdata/ComfyUI-Manager.git /workspace/ComfyUI/custom_nodes/ComfyUI-Manager
-
-# --- 2. Install Stable Diffusion WebUI (Forge Edition) ---
-RUN echo "Installing SD WebUI Forge..." && \
-    git clone https://github.com/lllyasviel/stable-diffusion-webui-forge.git /workspace/forge-ui
-
-# --- 3. Install Kohya's LoRA Training Scripts (For Training) ---
-RUN echo "Installing Kohya's SS..." && \
-    git clone https://github.com/kohya-ss/sd-scripts.git /workspace/kohya-ss
-
-# --- Install Python Dependencies (Combined) ---
-# Install all requirements and common deep learning packages
-RUN echo "Installing Python dependencies..." && \
+# --- Installation Step (Combined Layer for Efficiency) ---
+# Combine cloning and dependency installation into a single RUN command
+# to minimize intermediate layer size and fix "No space left on device" errors.
+RUN echo "Cloning repositories..." && \
+    # 1. Install ComfyUI
+    git clone https://github.com/comfyanonymous/ComfyUI.git /workspace/ComfyUI && \
+    git clone https://github.com/ltdrdata/ComfyUI-Manager.git /workspace/ComfyUI/custom_nodes/ComfyUI-Manager && \
+    \
+    # 2. Install Stable Diffusion WebUI (Forge Edition)
+    git clone https://github.com/lllyasviel/stable-diffusion-webui-forge.git /workspace/forge-ui && \
+    \
+    # 3. Install Kohya's LoRA Training Scripts (For Training)
+    git clone https://github.com/kohya-ss/sd-scripts.git /workspace/kohya-ss && \
+    \
+    echo "Installing Python dependencies..." && \
+    # Install all requirements and common deep learning packages in one go
     pip install --no-cache-dir \
     -r /workspace/ComfyUI/requirements.txt \
     -r /workspace/forge-ui/requirements.txt \
     -r /workspace/kohya-ss/requirements.txt \
     # Ensure specific packages are installed/upgraded
     diffusers bitsandbytes accelerate torchvision safetensors xformers \
-    # We remove the explicit torch install here because the base image already has PyTorch 2.8.0.
-    # The previous explicit install was causing potential conflicts or was unnecessary.
-    # If any conflicts arise, this line can be uncommented and adjusted:
-    # && pip install --no-cache-dir torch==2.8.0+cu121 --extra-index-url https://download.pytorch.org/whl/cu121
+    # Final cleanup of pip cache (optional, but good practice)
+    && pip cache purge
 
 # Copy the startup script into the container
 COPY start.sh /usr/local/bin/start.sh
