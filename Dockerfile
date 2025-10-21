@@ -1,5 +1,6 @@
-# Use the recommended base image from RunPod for GPU workloads
-FROM runpod/pytorch:2.2.0-py3.10-cuda12.1.1-devel
+# Use a currently available base image from RunPod for GPU workloads
+# Changed tag from 2.2.0 to a more stable/available 2.3.0 tag to fix 'not found' error.
+FROM runpod/pytorch:2.3.0-py3.10-cuda12.1.2-devel
 
 # --- Environment Setup ---
 ENV DEBIAN_FRONTEND=noninteractive
@@ -42,7 +43,8 @@ RUN echo "Installing Python dependencies..." && \
     -r /workspace/kohya-ss/requirements.txt \
     # Ensure specific packages are installed/upgraded
     diffusers bitsandbytes accelerate torchvision safetensors xformers \
-    && pip install --no-cache-dir torch==2.2.0+cu121 --extra-index-url https://download.pytorch.org/whl/cu121
+    # Match torch version to the base image environment
+    && pip install --no-cache-dir torch==2.3.0+cu121 --extra-index-url https://download.pytorch.org/whl/cu121
 
 # Copy the startup script into the container
 COPY start.sh /usr/local/bin/start.sh
