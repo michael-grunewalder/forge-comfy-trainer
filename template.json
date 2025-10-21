@@ -12,6 +12,6 @@
     { "container_port": 6006, "host_port": 6006, "protocol": "http", "description": "TensorBoard" },
     { "container_port": 8888, "host_port": 8888, "protocol": "http", "description": "JupyterLab" }
   ],
-  "start_script": "/start.sh",
+  "start_script": "/opt/start.sh",
   "tags": ["stable-diffusion", "training", "comfyui", "forge", "kohya", "jupyter"]
 }
