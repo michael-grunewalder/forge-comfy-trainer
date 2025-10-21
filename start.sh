@@ -1,120 +1,108 @@
-#!/usr/bin/env bash
-# Robust multi-service bootstrap for RunPod
-# Forge (A1111/Forge), ComfyUI, kohya_ss (trainer), JupyterLab
-# Shared data lives in /workspace/shared/*
+#!/bin/bash
 
-set -Eeuo pipefail
+# This script sets up persistence and launches all AI services.
 
-### ── Config ────────────────────────────────────────────────────────────────
-WORKDIR=${WORKDIR:-/workspace}
-SHARED_ROOT="$WORKDIR/shared"
-FORGE_REPO=${FORGE_REPO:-https://github.com/lllyasviel/stable-diffusion-webui-forge.git}
-COMFY_REPO=${COMFY_REPO:-https://github.com/comfyanonymous/ComfyUI.git}
-KOHYA_REPO=${KOHYA_REPO:-https://github.com/bmaltais/kohya_ss.git}
+# --- Configuration & Logging ---
+LOG_FILE="/workspace/startup_log.txt"
+SHARED_MODELS_DIR="/workspace/shared/models"
+echo "Starting multi-tool AI environment at $(date)" | tee $LOG_FILE
+echo "--- Initializing Shared Storage and Symlinks ---" | tee -a $LOG_FILE
 
-FORGE_PATH="$WORKDIR/forge"
-COMFY_PATH="$WORKDIR/comfyui"
-TRAIN_PATH="$WORKDIR/train"
+# Set up Environment Variables
+export PATH="/usr/local/nvidia/bin:/usr/local/cuda/bin:$PATH"
+export LD_LIBRARY_PATH="/usr/local/nvidia/lib:/usr/local/nvidia/lib64"
+export TRANSFORMERS_CACHE="/workspace/data/hf-cache"
+export HF_HOME="/workspace/data/hf-cache"
 
-FORGE_PORT=${FORGE_PORT:-7860}
-COMFY_PORT=${COMFY_PORT:-8188}
-JUPYTER_PORT=${JUPYTER_PORT:-8888}
-JUPYTER_TOKEN=${JUPYTER_TOKEN:-runpod}
+# --- 1. Create Shared Model Directories (Persistent on Network Volume) ---
+# Create the root shared directory
+mkdir -p "$SHARED_MODELS_DIR"
 
-SHARED_MODELS="$SHARED_ROOT/models"
-SHARED_OUTPUTS="$SHARED_ROOT/outputs"
-SHARED_NOTEBOOKS="$SHARED_ROOT/notebooks"
-SHARED_LOGS="$SHARED_ROOT/logs"
+# Define and create all necessary subdirectories for model types
+declare -a MODEL_FOLDERS=(
+    "checkpoints"  # SDXL/1.5 models (CKPT/SAFETENSORS)
+    "loras"        # LoRA/LyCORIS models
+    "vaes"         # VAE files
+    "embeddings"   # Textual Inversion embeddings
+    "upscalers"    # ESRGAN, SwinIR, etc.
+    "controlnet"   # ControlNet models
+)
 
-# Optional non-blocking preload (set SDXL_URL="" to disable)
-SDXL_URL=${SDXL_URL:-"https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0.safetensors?download=true"}
-SDXL_FILE="$SHARED_MODELS/sd_xl_base_1.0.safetensors"
-
-PY=/venv/bin/python
-JUP=/venv/bin/jupyter
-
-### ── Helpers ───────────────────────────────────────────────────────────────
-log(){ printf '[%s] %s\n' "$(date +'%F %T')" "$*"; }
-ensure_dir(){ mkdir -p "$1"; }
-ensure_repo(){
-  local path="$1" url="$2"
-  if [[ ! -d "$path/.git" ]]; then
-    log "Cloning $(basename "$path") → $path"
-    git clone --depth 1 "$url" "$path"
-  else
-    (cd "$path" && git fetch --depth 1 && git reset --hard @{upstream:-HEAD} || true)
-  fi
-}
-safe_link(){ rm -rf "$2"; ln -sfn "$1" "$2"; }
-start_bg(){ local name="$1"; shift; nohup "$@" >"$SHARED_LOGS/${name}.log" 2>&1 & echo $! > "$SHARED_LOGS/${name}.pid"; }
-
-### ── Prepare filesystem ────────────────────────────────────────────────────
-log "Preparing /workspace/shared structure"
-ensure_dir "$SHARED_MODELS"
-ensure_dir "$SHARED_OUTPUTS"
-ensure_dir "$SHARED_NOTEBOOKS"
-ensure_dir "$SHARED_LOGS"
-
-# Ensure repos exist on mounted volume
-ensure_repo "$FORGE_PATH" "$FORGE_REPO"
-ensure_repo "$COMFY_PATH" "$COMFY_REPO"
-ensure_repo "$TRAIN_PATH" "$KOHYA_REPO"
-
-# Link shared dirs into apps
-safe_link "$SHARED_MODELS"   "$FORGE_PATH/models"
-safe_link "$SHARED_MODELS"   "$COMFY_PATH/models"
-safe_link "$SHARED_MODELS"   "$TRAIN_PATH/models"
-safe_link "$SHARED_OUTPUTS"  "$FORGE_PATH/outputs"
-safe_link "$SHARED_OUTPUTS"  "$COMFY_PATH/output"
-safe_link "$SHARED_OUTPUTS"  "$TRAIN_PATH/outputs"
-safe_link "$SHARED_NOTEBOOKS" "$TRAIN_PATH/notebooks"
-
-### ── Background model download (non-blocking) ──────────────────────────────
-if [[ -n "$SDXL_URL" && ! -f "$SDXL_FILE" ]]; then
-  log "SDXL missing; downloading in background → $SDXL_FILE"
-  (
-    tmp="$SDXL_FILE.part"
-    if command -v aria2c >/dev/null 2>&1; then
-      aria2c -x8 -s8 -o "$tmp" "$SDXL_URL" && mv -f "$tmp" "$SDXL_FILE"
-    else
-      wget -q -O "$tmp" "$SDXL_URL" && mv -f "$tmp" "$SDXL_FILE"
+for folder in "${MODEL_FOLDERS[@]}"; do
+    if [ ! -d "$SHARED_MODELS_DIR/$folder" ]; then
+        mkdir -p "$SHARED_MODELS_DIR/$folder"
+        echo "Created shared directory: $SHARED_MODELS_DIR/$folder" | tee -a $LOG_FILE
     fi
-    log "SDXL download complete."
-  ) >> "$SHARED_LOGS/model_download.log" 2>&1 &
-else
-  log "SDXL present or preload disabled."
-fi
+done
 
-### ── Launch services ───────────────────────────────────────────────────────
-# Forge (use --listen alone; it binds 0.0.0.0)
-log "Starting Forge on :$FORGE_PORT"
-start_bg forge "$PY" "$FORGE_PATH/launch.py" \
-  --listen --port "$FORGE_PORT" --enable-insecure-extension-access
+# --- 2. Create Symbolic Links for Model Sharing ---
+# Function to create a symlink if the target directory doesn't exist or is empty
+create_symlink() {
+    local target_path=$1
+    local link_path=$2
+    local link_name=$(basename "$link_path")
+    local app_dir=$(dirname "$link_path")
 
-# ComfyUI
-log "Starting ComfyUI on :$COMFY_PORT"
-start_bg comfyui "$PY" "$COMFY_PATH/main.py" \
-  --listen 0.0.0.0 --port "$COMFY_PORT"
+    # Ensure the parent app directory exists
+    if [ ! -d "$app_dir" ]; then
+        echo "Error: Application directory $app_dir not found. Cannot create link for $link_name." | tee -a $LOG_FILE
+        return
+    fi
 
-# JupyterLab (proxy-friendly flags)
-log "Starting JupyterLab on :$JUPYTER_PORT"
-ensure_dir "$SHARED_NOTEBOOKS"
-start_bg jupyter "$JUP" lab \
-  --ip=0.0.0.0 --port="$JUPYTER_PORT" --no-browser --allow-root \
-  --NotebookApp.token="$JUPYTER_TOKEN" \
-  --NotebookApp.base_url="/" --NotebookApp.default_url="/lab" \
-  --NotebookApp.allow_origin="*" --NotebookApp.disable_check_xsrf=True \
-  --ServerApp.trust_xheaders=True \
-  --notebook-dir="$SHARED_NOTEBOOKS"
+    # Remove the existing directory/file if it's not already a symlink
+    if [ -d "$link_path" ] && [ ! -L "$link_path" ]; then
+        rm -rf "$link_path"
+    fi
 
-### ── Summary + live logs ───────────────────────────────────────────────────
-IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
-log "────────────────────────────────────────────"
-log "Forge UI     : http://$IP:$FORGE_PORT"
-log "ComfyUI      : http://$IP:$COMFY_PORT"
-log "JupyterLab   : http://$IP:$JUPYTER_PORT  (token: $JUPYTER_TOKEN)"
-log "Logs in      : $SHARED_LOGS"
-log "────────────────────────────────────────────"
+    # Create the symlink
+    if [ ! -L "$link_path" ]; then
+        ln -s "$target_path" "$link_path"
+        echo "Successfully linked $link_name to shared storage." | tee -a $LOG_FILE
+    else
+        echo "Symlink for $link_name already exists." | tee -a $LOG_FILE
+    fi
+}
 
-touch "$SHARED_LOGS"/{forge,comfyui,jupyter}.log
-exec tail -n +1 -F "$SHARED_LOGS"/{forge,comfyui,jupyter}.log
+# Symlinks for ComfyUI
+create_symlink "$SHARED_MODELS_DIR/checkpoints" "/workspace/ComfyUI/models/checkpoints"
+create_symlink "$SHARED_MODELS_DIR/loras" "/workspace/ComfyUI/models/loras"
+create_symlink "$SHARED_MODELS_DIR/vaes" "/workspace/ComfyUI/models/vae"
+create_symlink "$SHARED_MODELS_DIR/embeddings" "/workspace/ComfyUI/models/embeddings"
+create_symlink "$SHARED_MODELS_DIR/controlnet" "/workspace/ComfyUI/models/controlnet"
+
+# Symlinks for Forge UI (SD WebUI)
+create_symlink "$SHARED_MODELS_DIR/checkpoints" "/workspace/forge-ui/models/Stable-diffusion"
+create_symlink "$SHARED_MODELS_DIR/loras" "/workspace/forge-ui/models/Lora"
+create_symlink "$SHARED_MODELS_DIR/vaes" "/workspace/forge-ui/models/VAE"
+create_symlink "$SHARED_MODELS_DIR/embeddings" "/workspace/forge-ui/embeddings"
+create_symlink "$SHARED_MODELS_DIR/upscalers" "/workspace/forge-ui/models/ESRGAN"
+
+# Kohya-SS does not typically require symlinks as model paths are provided at runtime,
+# but the shared directory is now available for easy selection.
+
+echo "--- Launching Services ---" | tee -a $LOG_FILE
+
+# --- 3. Launch JupyterLab (Port 8888) ---
+echo "3. Starting JupyterLab on port 8888..." | tee -a $LOG_FILE
+JUPYTER_TOKEN=$(uuidgen)
+echo "JUPYTER_TOKEN=$JUPYTER_TOKEN" >> $LOG_FILE
+echo "JupyterLab Token: $JUPYTER_TOKEN"
+nohup jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root --NotebookApp.token="$JUPYTER_TOKEN" &> /workspace/jupyter.log &
+
+# --- 4. Launch ComfyUI (Port 8188) ---
+echo "4. Starting ComfyUI on port 8188..." | tee -a $LOG_FILE
+nohup python3 /workspace/ComfyUI/main.py --listen 0.0.0.0 --port 8188 --gpu-id 0 --disable-hashing --cuda-device 0 &> /workspace/comfyui.log &
+
+# --- 5. Launch Forge UI (Port 7860) ---
+echo "5. Starting SD WebUI Forge on port 7860..." | tee -a $LOG_FILE
+# Performance flags: --xformers and --opt-sdp-attention are key
+nohup python3 /workspace/forge-ui/launch.py --listen --port 7860 --no-half --no-half-vae --xformers --opt-sdp-attention --skip-version-check --exit &> /workspace/forgeui.log &
+
+# --- 6. Launch Training Interface (Kohya's SS GUI - Port 7861) ---
+echo "6. Starting Kohya's SS WebUI (Port 7861)..." | tee -a $LOG_FILE
+nohup /usr/bin/python3 /workspace/kohya-ss/train_gui.py --listen 0.0.0.0 &> /workspace/kohya_gui.log &
+
+# --- Keep the container running ---
+echo "All services launched. Monitoring logs..." | tee -a $LOG_FILE
+# Display the combined log for the user to see the Jupyter token and service status
+tail -f $LOG_FILE

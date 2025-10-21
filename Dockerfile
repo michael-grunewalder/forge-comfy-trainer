@@ -1,41 +1,52 @@
-FROM nvidia/cuda:12.1.1-runtime-ubuntu22.04
+# Use the recommended base image from RunPod for GPU workloads
+FROM runpod/pytorch:2.2.0-py3.10-cuda12.1.1-devel
 
-ARG DEBIAN_FRONTEND=noninteractive
-ENV PATH="/venv/bin:$PATH"
-ENV JUPYTER_TOKEN=runpod
-
-# ---------- Minimal system layer ----------
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 python3-venv python3-pip git wget curl ca-certificates \
-    libgl1-mesa-glx libglib2.0-0 ffmpeg \
- && rm -rf /var/lib/apt/lists/*
-
-# ---------- Virtual environment ----------
-RUN python3 -m venv /venv && \
-    pip install --upgrade pip wheel setuptools
-
-# ---------- Core packages ----------
-RUN pip install torch==2.3.1 torchvision==0.18.1 torchaudio==2.3.1 \
-    --index-url https://download.pytorch.org/whl/cu121 && \
-    pip install xformers==0.0.27
-
-# ---------- Essential deps ----------
-RUN pip install \
-    jupyterlab notebook einops==0.7.0 opencv-python-headless==4.10.0.84 \
-    numpy Pillow transformers==4.37.2 safetensors tqdm gradio==3.50.2
-
-# ---------- Repo setup ----------
+# --- Environment Setup ---
+ENV DEBIAN_FRONTEND=noninteractive
+ENV HOME=/workspace
 WORKDIR /workspace
-RUN mkdir -p /workspace/shared/{models,outputs,logs,notebooks} && \
-    git clone --depth=1 https://github.com/lllyasviel/stable-diffusion-webui-forge.git forge && \
-    git clone --depth=1 https://github.com/comfyanonymous/ComfyUI.git comfyui && \
-    git clone --depth=1 https://github.com/bmaltais/kohya_ss.git train
 
-# ---------- Start script ----------
-COPY start.sh /opt/start.sh
-RUN chmod +x /opt/start.sh
+# Install common utilities
+RUN echo "Installing OS dependencies..." && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+    git \
+    wget \
+    curl \
+    unzip \
+    nano \
+    # Clean up to reduce image size
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-ENV FORGE_PORT=7860 COMFY_PORT=8188 JUPYTER_PORT=8888
-EXPOSE 7860 8188 8888
+# --- 1. Install ComfyUI ---
+RUN echo "Installing ComfyUI..." && \
+    git clone https://github.com/comfyanonymous/ComfyUI.git /workspace/ComfyUI
+# Install ComfyUI Manager (highly recommended)
+RUN echo "Installing ComfyUI Manager..." && \
+    git clone https://github.com/ltdrdata/ComfyUI-Manager.git /workspace/ComfyUI/custom_nodes/ComfyUI-Manager
 
-CMD ["bash", "/opt/start.sh"]
+# --- 2. Install Stable Diffusion WebUI (Forge Edition) ---
+RUN echo "Installing SD WebUI Forge..." && \
+    git clone https://github.com/lllyasviel/stable-diffusion-webui-forge.git /workspace/forge-ui
+
+# --- 3. Install Kohya's LoRA Training Scripts (For Training) ---
+RUN echo "Installing Kohya's SS..." && \
+    git clone https://github.com/kohya-ss/sd-scripts.git /workspace/kohya-ss
+
+# --- Install Python Dependencies (Combined) ---
+# Install all requirements and common deep learning packages
+RUN echo "Installing Python dependencies..." && \
+    pip install --no-cache-dir \
+    -r /workspace/ComfyUI/requirements.txt \
+    -r /workspace/forge-ui/requirements.txt \
+    -r /workspace/kohya-ss/requirements.txt \
+    # Ensure specific packages are installed/upgraded
+    diffusers bitsandbytes accelerate torchvision safetensors xformers \
+    && pip install --no-cache-dir torch==2.2.0+cu121 --extra-index-url https://download.pytorch.org/whl/cu121
+
+# Copy the startup script into the container
+COPY start.sh /usr/local/bin/start.sh
+RUN chmod +x /usr/local/bin/start.sh
+
+# Define the container entrypoint
+ENTRYPOINT ["/usr/local/bin/start.sh"]
