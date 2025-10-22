@@ -28,24 +28,24 @@ fi
   cd /opt/forge
   echo "🚀 Starting Forge..."
   python launch.py \
-    --listen \
-    --server-name 0.0.0.0 \
-    --port 7860 \
-    --xformers \
-    --api \
-    --skip-version-check \
-    --disable-nan-check \
-    --gradio-queue \
-    --no-half-vae \
-    --enable-insecure-extension-access \
-    --gradio-auth none \
-    --ckpt-dir /workspace/shared/models/checkpoints \
-    --lora-dir /workspace/shared/models/loras \
-    --vae-dir /workspace/shared/models/vae \
-    --controlnet-dir /workspace/shared/models/controlnet \
-    --embeddings-dir /workspace/shared/models/embeddings \
-    --outputs-dir /workspace/shared/outputs/forge \
-    2>&1 | tee -a /workspace/shared/logs/forge/forge.log
+  --listen \
+  --server-name 0.0.0.0 \
+  --port 7860 \
+  --xformers \
+  --api \
+  --skip-version-check \
+  --disable-nan-check \
+  --gradio-queue \
+  --no-half-vae \
+  --enable-insecure-extension-access \
+  --gradio-auth none \
+  --ckpt-dir /workspace/shared/models/checkpoints \
+  --lora-dir /workspace/shared/models/loras \
+  --vae-dir /workspace/shared/models/vae \
+  --controlnet-dir /workspace/shared/models/controlnet \
+  --embeddings-dir /workspace/shared/models/embeddings \
+  --data-dir /workspace/shared \
+  2>&1 | tee -a /workspace/shared/logs/forge/forge.log
 ) &
 
 # --- Launch ComfyUI ---
@@ -61,14 +61,17 @@ fi
   cd /workspace
   echo "🚀 Starting JupyterLab..."
   jupyter lab \
-    --ip=0.0.0.0 \
-    --port=8888 \
-    --no-browser \
-    --allow-root \
-    --ServerApp.token='' \
-    --ServerApp.password='' \
-    --ServerApp.terminado_settings='{"shell_command":["/bin/bash"]}' \
-    --NotebookApp.default_url='/lab' \
+  --ip=0.0.0.0 \
+  --port=8888 \
+  --no-browser \
+  --allow-root \
+  --ServerApp.base_url=/ \
+  --ServerApp.use_redirect_file=False \
+  --ServerApp.disable_check_xsrf=True \
+  --ServerApp.token='' \
+  --ServerApp.password='' \
+  --ServerApp.terminado_settings='{"shell_command":["/bin/bash"]}' \
+  --NotebookApp.default_url='/lab' \
   2>&1 | tee -a /workspace/shared/logs/jupyter/jupyter.log
 ) &
 
