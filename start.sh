@@ -1,123 +1,117 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
-APP_VERSION="${APP_VERSION:-v1.0.0s}"
+BUILD_DATE="$(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+VERSION="${APP_VERSION:-v1.0.1s}"
+
 echo "=============================================================="
-echo " 🧠  Bearny's AI Lab] Booting..."
-echo "     Version: ${APP_VERSION}"
-echo "     Boot:    $(date -u)"
+echo " 🧠  Bearny's AI Lab"
+echo "=============================================================="
+echo "[Info] Version ${VERSION}"
+echo "[Boot] ${BUILD_DATE}"
 echo "=============================================================="
 
-echo "===== Bearny's AI Lab startup ====="
-echo "[Info] Version 1.0 (2025-10-22)"
-
-# --- Paths ---
-APPS_DIR="/workspace/apps"
-SHARED="/workspace/shared"
-LOGS_DIR="$SHARED/logs"
+# ---------- Directories ----------
 VENV="/opt/venv"
+LOGDIR="/workspace/shared/logs"
+mkdir -p "$LOGDIR"
 
-mkdir -p "$APPS_DIR" "$LOGS_DIR/forge" "$LOGS_DIR/comfyui" "$LOGS_DIR/jupyter" "$LOGS_DIR/kohya"
+APPS_DIR="/workspace/apps"
+mkdir -p "$APPS_DIR" \
+  /workspace/shared/{models,outputs,configs} \
+  /workspace/shared/models/{checkpoints,vae,loras,controlnet,embeddings}
 
-# --- Check virtualenv ---
-if [ ! -d "$VENV" ]; then
+# ---------- Create virtualenv if missing ----------
+if [ ! -x "$VENV/bin/pip" ]; then
   echo "[Setup] Creating Python virtualenv..."
-  python3 -m venv $VENV
-  $VENV/pip install --upgrade pip setuptools wheel
+  python3 -m venv "$VENV" || { echo "[Error] Could not create venv"; exit 1; }
+  "$VENV/bin/pip" install --upgrade pip setuptools wheel
 fi
 
-# --- Core dependencies ---
-echo "[Setup] Ensuring base Python packages..."
-$VENV/pip install --no-cache-dir -U torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-$VENV/pip install --no-cache-dir -U xformers==0.0.27.post2 \
-  fastapi uvicorn gradio==4.36.1 einops safetensors opencv-python pillow tqdm jupyterlab==4.2.5 tensorboard==2.17.1 bitsandbytes==0.43.3 accelerate==0.33.0
+PIP="$VENV/bin/pip"
+PY="$VENV/bin/python"
 
-# --- Update or skip ---
+# ---------- Install/upgrade core deps ----------
+echo "[Setup] Installing/Updating base Python packages..."
+$PIP install --no-cache-dir \
+  --index-url https://download.pytorch.org/whl/cu121 \
+  torch==2.4.1+cu121 torchvision==0.19.1+cu121 torchaudio==2.4.1+cu121
+
+$PIP install --no-cache-dir xformers==0.0.27.post2 \
+  gradio==4.36.1 fastapi uvicorn jupyterlab==4.2.5 einops safetensors \
+  opencv-python pillow tqdm bitsandbytes accelerate
+
+# ---------- Version control banner ----------
+echo "[Setup] Environment ready – Python: $(python3 --version)"
+echo "[Setup] PIP path: $PIP"
+echo "[Setup] Apps directory: $APPS_DIR"
+
 UPDATE_ON_START=${UPDATE_ON_START:-false}
-if [ "$UPDATE_ON_START" = "true" ]; then
-  echo "[Update] Pulling latest versions of all apps..."
-  for repo in forge ComfyUI kohya_ss ComfyUI-Manager; do
-    if [ -d "$APPS_DIR/$repo/.git" ]; then
-      (cd "$APPS_DIR/$repo" && git pull --rebase || true)
-    fi
-  done
+
+# ---------- Install Forge ----------
+FORGE_DIR="$APPS_DIR/forge"
+if [ ! -d "$FORGE_DIR/.git" ]; then
+  echo "[Setup] Installing Forge into $FORGE_DIR ..."
+  git clone --depth=1 https://github.com/lllyasviel/stable-diffusion-webui-forge.git "$FORGE_DIR"
 else
-  echo "[Info] Skipping updates (UPDATE_ON_START=$UPDATE_ON_START)"
+  echo "[Setup] Forge found."
+  if [ "$UPDATE_ON_START" = "true" ]; then
+    echo "[Update] Pulling Forge..."
+    (cd "$FORGE_DIR" && git pull --rebase || true)
+  fi
 fi
 
-# --- Forge install ---
-if [ ! -d "$APPS_DIR/forge" ]; then
-  echo "[Setup] Installing Forge..."
-  git clone --depth=1 https://github.com/lllyasviel/stable-diffusion-webui-forge.git "$APPS_DIR/forge"
+if [ -f "$FORGE_DIR/requirements_versions.txt" ]; then
+  $PIP install --no-cache-dir -r "$FORGE_DIR/requirements_versions.txt" || true
+fi
+if [ -f "$FORGE_DIR/requirements.txt" ]; then
+  $PIP install --no-cache-dir -r "$FORGE_DIR/requirements.txt" || true
 fi
 
-echo "[Forge] Launching on port 7860..."
-cd "$APPS_DIR/forge"
-nohup $VENV/python launch.py \
-  --listen \
-  --server-name 0.0.0.0 \
-  --port 7860 \
+# ---------- Install ComfyUI & Manager ----------
+COMFY_DIR="$APPS_DIR/ComfyUI"
+if [ ! -d "$COMFY_DIR/.git" ]; then
+  echo "[Setup] Installing ComfyUI..."
+  git clone --depth=1 https://github.com/comfyanonymous/ComfyUI.git "$COMFY_DIR"
+  if [ -f "$COMFY_DIR/requirements.txt" ]; then
+    $PIP install --no-cache-dir -r "$COMFY_DIR/requirements.txt" || true
+  fi
+else
+  if [ "$UPDATE_ON_START" = "true" ]; then
+    (cd "$COMFY_DIR" && git pull --rebase || true)
+  fi
+fi
+
+MANAGER_DIR="$COMFY_DIR/custom_nodes/ComfyUI-Manager"
+if [ ! -d "$MANAGER_DIR/.git" ]; then
+  git clone --depth=1 https://github.com/ltdrdata/ComfyUI-Manager.git "$MANAGER_DIR"
+fi
+
+# ---------- Launch services ----------
+echo "[Launch] Starting JupyterLab on :8888"
+nohup "$PY" -m jupyterlab --ip=0.0.0.0 --port=8888 --no-browser \
+      --NotebookApp.token='' --NotebookApp.password='' \
+      > "$LOGDIR/jupyter.log" 2>&1 &
+
+echo "[Launch] Starting ComfyUI on :8188"
+cd "$COMFY_DIR"
+nohup "$PY" main.py --listen 0.0.0.0 --port 8188 \
+      > "$LOGDIR/comfyui.log" 2>&1 &
+
+echo "[Launch] Starting Forge on :7860"
+cd "$FORGE_DIR"
+exec "$PY" launch.py \
+  --listen --server-name 0.0.0.0 --port 7860 \
   --xformers \
   --api \
   --skip-version-check \
   --disable-nan-check \
-  --no-half \
-  --no-half-vae \
+  --no-half --no-half-vae \
   --enable-insecure-extension-access \
   --ckpt-dir /workspace/shared/models/checkpoints \
-  --lora-dir /workspace/shared/models/loras \
   --vae-dir /workspace/shared/models/vae \
-  --controlnet-dir /workspace/shared/models/controlnet \
+  --lora-dir /workspace/shared/models/loras \
   --embeddings-dir /workspace/shared/models/embeddings \
+  --controlnet-dir /workspace/shared/models/controlnet \
   --data-dir /workspace/shared/configs \
-  > "$LOGS_DIR/forge/forge.log" 2>&1 &
-
-# --- ComfyUI + Manager ---
-if [ ! -d "$APPS_DIR/ComfyUI" ]; then
-  echo "[Setup] Installing ComfyUI..."
-  git clone --depth=1 https://github.com/comfyanonymous/ComfyUI.git "$APPS_DIR/ComfyUI"
-  cd "$APPS_DIR/ComfyUI"
-  $VENV/pip install --no-cache-dir -r requirements.txt || true
-fi
-
-COMFY_EXT_DIR="$APPS_DIR/ComfyUI/custom_nodes/ComfyUI-Manager"
-if [ ! -d "$COMFY_EXT_DIR" ]; then
-  echo "[Setup] Installing ComfyUI Manager..."
-  git clone --depth=1 https://github.com/ltdrdata/ComfyUI-Manager.git "$COMFY_EXT_DIR"
-else
-  echo "[Setup] Updating ComfyUI Manager..."
-  (cd "$COMFY_EXT_DIR" && git pull --rebase || true)
-fi
-
-echo "[ComfyUI] Launching on port 8188..."
-cd "$APPS_DIR/ComfyUI"
-nohup $VENV/python main.py --listen 0.0.0.0 --port 8188 \
-  > "$LOGS_DIR/comfyui/comfyui.log" 2>&1 &
-
-# --- kohya_ss (optional LoRA GUI) ---
-if [ ! -d "$APPS_DIR/kohya_ss" ]; then
-  echo "[Setup] Installing kohya_ss..."
-  git clone --depth=1 https://github.com/bmaltais/kohya_ss.git "$APPS_DIR/kohya_ss"
-fi
-
-echo "[kohya_ss] Launching on port 7861..."
-cd "$APPS_DIR/kohya_ss"
-nohup $VENV/python kohya_gui.py --listen 0.0.0.0 --server_port 7861 \
-  > "$LOGS_DIR/kohya/kohya.log" 2>&1 &
-
-# --- JupyterLab ---
-echo "[Jupyter] Launching on port 8888..."
-nohup $VENV/python -m jupyterlab \
-  --ip=0.0.0.0 --port=8888 --no-browser --NotebookApp.token='' \
-  --NotebookApp.password='' --NotebookApp.allow_origin='*' \
-  --NotebookApp.notebook_dir=/workspace \
-  > "$LOGS_DIR/jupyter/jupyter.log" 2>&1 &
-
-echo "===== All services started ====="
-echo " Forge:      http://<pod-url>:7860"
-echo " ComfyUI:    http://<pod-url>:8188"
-echo " kohya_ss:   http://<pod-url>:7861"
-echo " JupyterLab: http://<pod-url>:8888/lab"
-
-# Keep container alive
-tail -f /dev/null
+  2>&1 | tee -a "$LOGDIR/forge.log"
