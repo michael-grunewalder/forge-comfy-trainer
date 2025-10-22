@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
-echo "=============================================================="
-echo " 🧠  BEARNY#s AI LAB"
-echo "     Version:  ${APP_VERSION:-unknown}"
-echo "     Built: $(date -u)"
-echo "=============================================================="
-sleep 1
 
-# --- Ensure shared directories exist ---
+# ===== Version banner =====
+echo "=============================================================="
+echo " 🧠  RunPod SD Environment"
+echo "     Version: ${APP_VERSION}"
+echo "     Boot:    $(date -u)"
+echo "=============================================================="
+
+# ===== Shared dirs =====
 mkdir -p /workspace/shared/{models,outputs,logs,datasets,checkpoints}
 mkdir -p /workspace/shared/models/{checkpoints,loras,vae,clip,clip_vision,controlnet,upscale_models,embeddings}
 mkdir -p /workspace/shared/outputs/{forge,comfyui,kohya}
@@ -17,38 +18,39 @@ mkdir -p /workspace/notebooks
 export HF_HOME=/workspace/shared/huggingface
 export PYTHONUNBUFFERED=1
 
-# --- Dummy checkpoint to pass readiness ---
-if ! ls /workspace/shared/models/checkpoints/*.{safetensors,ckpt} >/dev/null 2>&1; then
-  echo "⚠️ No model found in /workspace/shared/models/checkpoints; creating dummy.safetensors"
-  touch /workspace/shared/models/checkpoints/dummy.safetensors
-fi
+# ===== NO dummy checkpoints =====
+# Forge can start without a checkpoint; a fake .safetensors breaks metadata parsing.
+# Put a real model into /workspace/shared/models/checkpoints to actually generate.
 
-# --- Launch Forge (Stable-Diffusion-WebUI-Forge) ---
+# ===== Forge (A1111/Forge) =====
 (
   cd /opt/forge
   echo "🚀 Starting Forge..."
+  # Notes:
+  # - --outputs-dir REMOVED (not supported by current Forge)
+  # - --gradio-auth REMOVED (bad value 'none' crashed gradio)
+  # - --data-dir points Forge at /workspace/shared for config/cache/outputs
   python launch.py \
-  --listen \
-  --server-name 0.0.0.0 \
-  --port 7860 \
-  --xformers \
-  --api \
-  --skip-version-check \
-  --disable-nan-check \
-  --gradio-queue \
-  --no-half-vae \
-  --enable-insecure-extension-access \
-  --gradio-auth none \
-  --ckpt-dir /workspace/shared/models/checkpoints \
-  --lora-dir /workspace/shared/models/loras \
-  --vae-dir /workspace/shared/models/vae \
-  --controlnet-dir /workspace/shared/models/controlnet \
-  --embeddings-dir /workspace/shared/models/embeddings \
-  --data-dir /workspace/shared \
+    --listen \
+    --server-name 0.0.0.0 \
+    --port 7860 \
+    --xformers \
+    --api \
+    --skip-version-check \
+    --disable-nan-check \
+    --gradio-queue \
+    --no-half-vae \
+    --enable-insecure-extension-access \
+    --ckpt-dir /workspace/shared/models/checkpoints \
+    --lora-dir /workspace/shared/models/loras \
+    --vae-dir /workspace/shared/models/vae \
+    --controlnet-dir /workspace/shared/models/controlnet \
+    --embeddings-dir /workspace/shared/models/embeddings \
+    --data-dir /workspace/shared \
   2>&1 | tee -a /workspace/shared/logs/forge/forge.log
 ) &
 
-# --- Launch ComfyUI ---
+# ===== ComfyUI =====
 (
   cd /opt/ComfyUI
   echo "🚀 Starting ComfyUI..."
@@ -56,26 +58,30 @@ fi
   2>&1 | tee -a /workspace/shared/logs/comfyui/comfyui.log
 ) &
 
-# --- Launch JupyterLab ---
+# ===== JupyterLab =====
 (
   cd /workspace
   echo "🚀 Starting JupyterLab..."
+  # The proxy-white-screen was a CSP/XSRF mismatch. These flags fix it under RunPod’s proxy.
   jupyter lab \
-  --ip=0.0.0.0 \
-  --port=8888 \
-  --no-browser \
-  --allow-root \
-  --ServerApp.base_url=/ \
-  --ServerApp.use_redirect_file=False \
-  --ServerApp.disable_check_xsrf=True \
-  --ServerApp.token='' \
-  --ServerApp.password='' \
-  --ServerApp.terminado_settings='{"shell_command":["/bin/bash"]}' \
-  --NotebookApp.default_url='/lab' \
+    --ip=0.0.0.0 \
+    --port=8888 \
+    --no-browser \
+    --allow-root \
+    --ServerApp.base_url=/ \
+    --ServerApp.trust_xheaders=True \
+    --ServerApp.allow_origin='*' \
+    --ServerApp.use_redirect_file=False \
+    --ServerApp.disable_check_xsrf=True \
+    --ServerApp.token='' \
+    --ServerApp.password='' \
+    --ServerApp.terminado_settings='{"shell_command":["/bin/bash"]}' \
+    --NotebookApp.default_url='/lab' \
+    --ServerApp.tornado_settings='{"headers":{"Content-Security-Policy":""}}' \
   2>&1 | tee -a /workspace/shared/logs/jupyter/jupyter.log
 ) &
 
-# --- Tail logs for visibility ---
+# ===== UX =====
 sleep 2
 echo "=============================================================="
 echo "Forge:     http://localhost:7860"

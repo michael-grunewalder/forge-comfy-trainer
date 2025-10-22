@@ -9,7 +9,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     HF_HOME=/workspace/shared/huggingface
 
 # Add this near the top of the Dockerfile
-ARG IMAGE_VERSION="v1.0.2"
+ARG IMAGE_VERSION="v1.0.3"
 ENV APP_VERSION=$IMAGE_VERSION
 LABEL maintainer="ymichael@grunewalder.com" \
       version="${IMAGE_VERSION}" \
