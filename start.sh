@@ -52,7 +52,6 @@ export PYTHONUNBUFFERED=1
 ) &
 
 # ---------- JupyterLab ----------
-# ---------- JupyterLab ----------
 (
   cd /workspace
   echo "🚀 Starting JupyterLab..."

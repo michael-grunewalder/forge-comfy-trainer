@@ -1,13 +1,66 @@
 {
-  "name": "Bearny#s AI Lab",
+  "name": "Bearny's AI Lab",
   "image_name": "ghcr.io/michael-grunewalder/bearnys-ai-lab:latest",
   "containerDiskGB": 20,
   "volumeInGB": 50,
   "volumeMountPath": "/workspace",
   "ports": [
-    { "containerPort": 7860, "hostPort": 7860, "protocol": "tcp", "httpProxy": true, "path": "/" },
-    { "containerPort": 8188, "hostPort": 8188, "protocol": "tcp", "httpProxy": true, "path": "/" },
-    { "containerPort": 8888, "hostPort": 8888, "protocol": "tcp", "httpProxy": true, "path": "/" }
+    {
+      "containerPort": 7860,
+      "hostPort": 7860,
+      "protocol": "tcp",
+      "httpProxy": true,
+      "path": "/",
+      "readinessProbe": {
+        "path": "/",
+        "port": 7860,
+        "initialDelaySeconds": 45,
+        "periodSeconds": 10,
+        "timeoutSeconds": 5
+      }
+    },
+    {
+      "containerPort": 7861,
+      "hostPort": 7861,
+      "protocol": "tcp",
+      "httpProxy": true,
+      "path": "/",
+      "readinessProbe": {
+        "path": "/",
+        "port": 7861,
+        "initialDelaySeconds": 45,
+        "periodSeconds": 10,
+        "timeoutSeconds": 5
+      }
+    },
+    {
+      "containerPort": 8188,
+      "hostPort": 8188,
+      "protocol": "tcp",
+      "httpProxy": true,
+      "path": "/",
+      "readinessProbe": {
+        "path": "/",
+        "port": 8188,
+        "initialDelaySeconds": 10,
+        "periodSeconds": 10,
+        "timeoutSeconds": 5
+      }
+    },
+    {
+      "containerPort": 8888,
+      "hostPort": 8888,
+      "protocol": "tcp",
+      "httpProxy": true,
+      "path": "/",
+      "readinessProbe": {
+        "path": "/lab",
+        "port": 8888,
+        "initialDelaySeconds": 10,
+        "periodSeconds": 10,
+        "timeoutSeconds": 5
+      }
+    }
   ],
   "env": [
     { "key": "PYTHONUNBUFFERED", "value": "1" }
