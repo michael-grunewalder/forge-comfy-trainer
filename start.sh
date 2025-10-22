@@ -21,25 +21,25 @@ export PYTHONUNBUFFERED=1
 # ---------- Forge ----------
 (
   cd /opt/forge
-  echo "🚀 Starting Forge..."
-  # Exactly the flags your Forge build accepts (confirmed by your log).
-  python launch.py \
-    --listen \
-    --server-name 0.0.0.0 \
-    --port 7860 \
-    --xformers \
-    --api \
-    --skip-version-check \
-    --disable-nan-check \
-    --gradio-queue \
-    --no-half-vae \
-    --enable-insecure-extension-access \
-    --ckpt-dir /workspace/shared/models/checkpoints \
-    --lora-dir /workspace/shared/models/loras \
-    --vae-dir /workspace/shared/models/vae \
-    --controlnet-dir /workspace/shared/models/controlnet \
-    --embeddings-dir /workspace/shared/models/embeddings \
-    --data-dir /workspace/shared \
+echo "🚀 Starting Forge (stay-alive mode)..."
+
+exec python launch.py \
+  --listen \
+  --server-name 0.0.0.0 \
+  --port 7860 \
+  --xformers \
+  --skip-version-check \
+  --disable-nan-check \
+  --no-half \
+  --no-half-vae \
+  --enable-insecure-extension-access \
+  --api \
+  --ckpt-dir /workspace/shared/models/checkpoints \
+  --lora-dir /workspace/shared/models/loras \
+  --vae-dir /workspace/shared/models/vae \
+  --controlnet-dir /workspace/shared/models/controlnet \
+  --embeddings-dir /workspace/shared/models/embeddings \
+  --data-dir /workspace/shared/configs \
   2>&1 | tee -a /workspace/shared/logs/forge/forge.log
 ) &
 

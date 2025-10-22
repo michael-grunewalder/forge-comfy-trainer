@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 FROM python:3.10-slim
 
-ARG IMAGE_VERSION="v1.0.6"
+ARG IMAGE_VERSION="v1.0.7"
 ENV APP_VERSION=${IMAGE_VERSION} \
     DEBIAN_FRONTEND=noninteractive \
     PIP_NO_CACHE_DIR=1 \
@@ -32,7 +32,10 @@ WORKDIR /opt
 # Apps (shallow)
 RUN git clone --depth=1 https://github.com/lllyasviel/stable-diffusion-webui-forge.git forge && \
     git clone --depth=1 https://github.com/comfyanonymous/ComfyUI.git ComfyUI && \
-    git clone --depth=1 https://github.com/bmaltais/kohya_ss.git kohya_ss
+    git clone --depth=1 https://github.com/bmaltais/kohya_ss.git kohya_ss && \
+    # Add ComfyUI Manager extension
+    mkdir -p /opt/ComfyUI/custom_nodes && \
+    git clone --depth=1 https://github.com/ltdrdata/ComfyUI-Manager.git /opt/ComfyUI/custom_nodes/ComfyUI-Manager
 
 # Python env
 RUN python -m venv /opt/venv && /opt/venv/bin/pip install --upgrade pip setuptools wheel
@@ -66,7 +69,7 @@ EXPOSE 7860 8188 8888
 
 # Build banner
 RUN echo "🧩 Building SD Dev Image - ${APP_VERSION}"
-
+RUN chown -R root:root /opt/ComfyUI/custom_nodes
 # Start script
 COPY start.sh /opt/start.sh
 RUN chmod +x /opt/start.sh
