@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_VERSION="${APP_VERSION:-v1.0.4s}"
+APP_VERSION="${APP_VERSION:-v1.0.5s}"
 echo "=============================================================="
 echo " 🧠  RunPod SD Environment"
 echo "     Version: ${APP_VERSION}"
@@ -52,27 +52,26 @@ export PYTHONUNBUFFERED=1
 ) &
 
 # ---------- JupyterLab ----------
+# ---------- JupyterLab ----------
 (
   cd /workspace
   echo "🚀 Starting JupyterLab..."
-  # The white-screen through RunPod’s proxy is fixed by:
-  #  - explicit base_url to /
-  #  - disable XSRF checks behind proxy
-  #  - trust_xheaders and allow_origin '*'
-  #  - clear CSP so static assets load
-  #  - no token/password
   jupyter lab \
     --ip=0.0.0.0 \
     --port=8888 \
     --no-browser \
     --allow-root \
     --IdentityProvider.token='' \
+    --IdentityProvider.password_required=False \
+    --ServerApp.token='' \
+    --ServerApp.password='' \
     --ServerApp.base_url=/ \
     --ServerApp.root_dir=/workspace \
     --ServerApp.trust_xheaders=True \
     --ServerApp.allow_origin='*' \
-    --ServerApp.use_redirect_file=False \
+    --ServerApp.allow_remote_access=True \
     --ServerApp.disable_check_xsrf=True \
+    --ServerApp.use_redirect_file=False \
     --ServerApp.tornado_settings='{"headers":{"Content-Security-Policy":""}}' \
     --NotebookApp.default_url='/lab' \
     --ServerApp.terminado_settings='{"shell_command":["/bin/bash"]}' \
