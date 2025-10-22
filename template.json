@@ -63,7 +63,8 @@
     }
   ],
   "env": [
-    { "key": "PYTHONUNBUFFERED", "value": "1" }
+    { "key": "PYTHONUNBUFFERED", "value": "1" },
+    { "key": "UPDATE_ON_START", "value": "false" }
   ],
   "gpuTypeId": "NVIDIA",
   "startCommand": "/opt/start.sh"

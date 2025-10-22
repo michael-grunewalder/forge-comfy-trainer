@@ -1,91 +1,123 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/bash
+set -e
 
-APP_VERSION="${APP_VERSION:-v1.0.5s}"
+APP_VERSION="${APP_VERSION:-v1.0.0s}"
 echo "=============================================================="
-echo " 🧠  RunPod SD Environment"
+echo " 🧠  Bearny's AI Lab] Booting..."
 echo "     Version: ${APP_VERSION}"
 echo "     Boot:    $(date -u)"
 echo "=============================================================="
 
-# Shared dirs (idempotent)
-mkdir -p /workspace/shared/{models,outputs,logs,datasets,checkpoints}
-mkdir -p /workspace/shared/models/{checkpoints,loras,vae,clip,clip_vision,controlnet,upscale_models,embeddings}
-mkdir -p /workspace/shared/outputs/{forge,comfyui,kohya}
-mkdir -p /workspace/shared/logs/{forge,comfyui,jupyter,kohya}
-mkdir -p /workspace/notebooks
+echo "===== Bearny's AI Lab startup ====="
+echo "[Info] Version 1.0 (2025-10-22)"
 
-export HF_HOME=/workspace/shared/huggingface
-export PYTHONUNBUFFERED=1
+# --- Paths ---
+APPS_DIR="/workspace/apps"
+SHARED="/workspace/shared"
+LOGS_DIR="$SHARED/logs"
+VENV="/opt/venv"
 
-# ---------- Forge ----------
-(
-  cd /opt/forge
-echo "🚀 Starting Forge (stay-alive mode)..."
+mkdir -p "$APPS_DIR" "$LOGS_DIR/forge" "$LOGS_DIR/comfyui" "$LOGS_DIR/jupyter" "$LOGS_DIR/kohya"
 
-exec python launch.py \
+# --- Check virtualenv ---
+if [ ! -d "$VENV" ]; then
+  echo "[Setup] Creating Python virtualenv..."
+  python3 -m venv $VENV
+  $VENV/pip install --upgrade pip setuptools wheel
+fi
+
+# --- Core dependencies ---
+echo "[Setup] Ensuring base Python packages..."
+$VENV/pip install --no-cache-dir -U torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+$VENV/pip install --no-cache-dir -U xformers==0.0.27.post2 \
+  fastapi uvicorn gradio==4.36.1 einops safetensors opencv-python pillow tqdm jupyterlab==4.2.5 tensorboard==2.17.1 bitsandbytes==0.43.3 accelerate==0.33.0
+
+# --- Update or skip ---
+UPDATE_ON_START=${UPDATE_ON_START:-false}
+if [ "$UPDATE_ON_START" = "true" ]; then
+  echo "[Update] Pulling latest versions of all apps..."
+  for repo in forge ComfyUI kohya_ss ComfyUI-Manager; do
+    if [ -d "$APPS_DIR/$repo/.git" ]; then
+      (cd "$APPS_DIR/$repo" && git pull --rebase || true)
+    fi
+  done
+else
+  echo "[Info] Skipping updates (UPDATE_ON_START=$UPDATE_ON_START)"
+fi
+
+# --- Forge install ---
+if [ ! -d "$APPS_DIR/forge" ]; then
+  echo "[Setup] Installing Forge..."
+  git clone --depth=1 https://github.com/lllyasviel/stable-diffusion-webui-forge.git "$APPS_DIR/forge"
+fi
+
+echo "[Forge] Launching on port 7860..."
+cd "$APPS_DIR/forge"
+nohup $VENV/python launch.py \
   --listen \
   --server-name 0.0.0.0 \
   --port 7860 \
   --xformers \
+  --api \
   --skip-version-check \
   --disable-nan-check \
   --no-half \
   --no-half-vae \
   --enable-insecure-extension-access \
-  --api \
   --ckpt-dir /workspace/shared/models/checkpoints \
   --lora-dir /workspace/shared/models/loras \
   --vae-dir /workspace/shared/models/vae \
   --controlnet-dir /workspace/shared/models/controlnet \
   --embeddings-dir /workspace/shared/models/embeddings \
   --data-dir /workspace/shared/configs \
-  2>&1 | tee -a /workspace/shared/logs/forge/forge.log
-) &
+  > "$LOGS_DIR/forge/forge.log" 2>&1 &
 
-# ---------- ComfyUI ----------
-(
-  cd /opt/ComfyUI
-  echo "🚀 Starting ComfyUI..."
-  python main.py --listen 0.0.0.0 --port 8188 \
-  2>&1 | tee -a /workspace/shared/logs/comfyui/comfyui.log
-) &
+# --- ComfyUI + Manager ---
+if [ ! -d "$APPS_DIR/ComfyUI" ]; then
+  echo "[Setup] Installing ComfyUI..."
+  git clone --depth=1 https://github.com/comfyanonymous/ComfyUI.git "$APPS_DIR/ComfyUI"
+  cd "$APPS_DIR/ComfyUI"
+  $VENV/pip install --no-cache-dir -r requirements.txt || true
+fi
 
-# ---------- JupyterLab ----------
-(
-  cd /workspace
-  echo "🚀 Starting JupyterLab..."
-  jupyter lab \
-    --ip=0.0.0.0 \
-    --port=8888 \
-    --no-browser \
-    --allow-root \
-    --IdentityProvider.token='' \
-    --IdentityProvider.password_required=False \
-    --ServerApp.token='' \
-    --ServerApp.password='' \
-    --ServerApp.base_url=/ \
-    --ServerApp.root_dir=/workspace \
-    --ServerApp.trust_xheaders=True \
-    --ServerApp.allow_origin='*' \
-    --ServerApp.allow_remote_access=True \
-    --ServerApp.disable_check_xsrf=True \
-    --ServerApp.use_redirect_file=False \
-    --ServerApp.tornado_settings='{"headers":{"Content-Security-Policy":""}}' \
-    --NotebookApp.default_url='/lab' \
-    --ServerApp.terminado_settings='{"shell_command":["/bin/bash"]}' \
-  2>&1 | tee -a /workspace/shared/logs/jupyter/jupyter.log
-) &
+COMFY_EXT_DIR="$APPS_DIR/ComfyUI/custom_nodes/ComfyUI-Manager"
+if [ ! -d "$COMFY_EXT_DIR" ]; then
+  echo "[Setup] Installing ComfyUI Manager..."
+  git clone --depth=1 https://github.com/ltdrdata/ComfyUI-Manager.git "$COMFY_EXT_DIR"
+else
+  echo "[Setup] Updating ComfyUI Manager..."
+  (cd "$COMFY_EXT_DIR" && git pull --rebase || true)
+fi
 
-# ---------- Log tail ----------
-sleep 2
-echo "=============================================================="
-echo "Forge:     http://localhost:7860"
-echo "ComfyUI:   http://localhost:8188"
-echo "Jupyter:   http://localhost:8888"
-echo "=============================================================="
+echo "[ComfyUI] Launching on port 8188..."
+cd "$APPS_DIR/ComfyUI"
+nohup $VENV/python main.py --listen 0.0.0.0 --port 8188 \
+  > "$LOGS_DIR/comfyui/comfyui.log" 2>&1 &
 
-tail -F \
-  /workspace/shared/logs/forge/forge.log \
-  /workspace/shared/logs/comfyui/comfyui.log \
-  /workspace/shared/logs/jupyter/jupyter.log
+# --- kohya_ss (optional LoRA GUI) ---
+if [ ! -d "$APPS_DIR/kohya_ss" ]; then
+  echo "[Setup] Installing kohya_ss..."
+  git clone --depth=1 https://github.com/bmaltais/kohya_ss.git "$APPS_DIR/kohya_ss"
+fi
+
+echo "[kohya_ss] Launching on port 7861..."
+cd "$APPS_DIR/kohya_ss"
+nohup $VENV/python kohya_gui.py --listen 0.0.0.0 --server_port 7861 \
+  > "$LOGS_DIR/kohya/kohya.log" 2>&1 &
+
+# --- JupyterLab ---
+echo "[Jupyter] Launching on port 8888..."
+nohup $VENV/python -m jupyterlab \
+  --ip=0.0.0.0 --port=8888 --no-browser --NotebookApp.token='' \
+  --NotebookApp.password='' --NotebookApp.allow_origin='*' \
+  --NotebookApp.notebook_dir=/workspace \
+  > "$LOGS_DIR/jupyter/jupyter.log" 2>&1 &
+
+echo "===== All services started ====="
+echo " Forge:      http://<pod-url>:7860"
+echo " ComfyUI:    http://<pod-url>:8188"
+echo " kohya_ss:   http://<pod-url>:7861"
+echo " JupyterLab: http://<pod-url>:8888/lab"
+
+# Keep container alive
+tail -f /dev/null
