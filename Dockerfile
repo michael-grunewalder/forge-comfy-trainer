@@ -5,7 +5,7 @@
 FROM python:3.10-slim AS base
 
 # --- metadata & version info ---
-ARG IMAGE_VERSION="v1.0.0-FUCK_GPT"
+ARG IMAGE_VERSION="v1.1.1-FUCK_GPT"
 ENV APP_VERSION=${IMAGE_VERSION} \
     DEBIAN_FRONTEND=noninteractive \
     TZ=Etc/UTC \
@@ -21,6 +21,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # --- build banner (keep your version echo) ---
 RUN echo "🧩 Building SD Dev Image - ${APP_VERSION}"
+# add these system deps before pip install
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git wget curl ffmpeg jq tini \
+    libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 \
+    python3-venv python3-dev build-essential \
+    libcairo2-dev pkg-config libgirepository1.0-dev \
+ && rm -rf /var/lib/apt/lists/*
 
 # ===========================================================
 # 🧠 Create venv & install minimal build-safe deps
