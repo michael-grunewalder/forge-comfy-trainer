@@ -1,4 +1,5 @@
 FROM nvidia/cuda:12.1.1-base-ubuntu22.04
+
 ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /workspace
 
@@ -11,8 +12,13 @@ ENV APP_PATH=/workspace/Apps/ComfyUI \
     SHARED_MODELS=/workspace/Shared/models \
     TOOLS_PATH=/workspace/tools
 
+# Create all base directories
 RUN mkdir -p $APP_PATH $PYTHON_PATH $SHARED_MODELS $TOOLS_PATH
 
+# --- FIX: include the shared tools folder ---
+COPY ../tools /workspace/tools
+
+# Copy module launcher
 COPY start.sh /workspace/Apps/ComfyUI/start.sh
 RUN chmod +x /workspace/Apps/ComfyUI/start.sh
 

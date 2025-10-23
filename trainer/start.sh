@@ -1,7 +1,10 @@
 #!/bin/bash
 set -e
-log_info()    { echo -e "\033[1;33m[INFO]\033[0m $1"; }
+llog_info()    { echo -e "\033[1;33m[INFO]\033[0m $1"; }
 log_success() { echo -e "\033[1;32m[SUCCESS]\033[0m $1"; }
+log_error()   { echo -e "\033[1;31m[ERROR]\033[0m $1"; }
+
+mkdir -p /workspace/tools
 
 APP_PATH="/workspace/Apps/Trainer"
 PYTHON_PATH="/workspace/Python/Trainer"

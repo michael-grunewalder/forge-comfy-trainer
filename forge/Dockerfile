@@ -1,4 +1,6 @@
 FROM nvidia/cuda:12.1.1-base-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /workspace
 
 RUN apt-get update && apt-get install -y \
@@ -7,9 +9,13 @@ RUN apt-get update && apt-get install -y \
 
 ENV APP_PATH=/workspace/Apps/Forge \
     PYTHON_PATH=/workspace/Python/Forge \
-    SHARED_MODELS=/workspace/Shared/models
+    SHARED_MODELS=/workspace/Shared/models \
+    TOOLS_PATH=/workspace/tools
 
-RUN mkdir -p $APP_PATH $PYTHON_PATH $SHARED_MODELS
+RUN mkdir -p $APP_PATH $PYTHON_PATH $SHARED_MODELS $TOOLS_PATH
+
+# --- FIX: copy shared tools into image ---
+COPY ../tools /workspace/tools
 
 COPY start.sh /workspace/Apps/Forge/start.sh
 RUN chmod +x /workspace/Apps/Forge/start.sh
