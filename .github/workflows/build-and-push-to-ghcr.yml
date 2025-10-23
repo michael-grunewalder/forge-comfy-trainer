@@ -1,45 +1,49 @@
-name: Build and push Docker image to GHCR
+name: Build & Push All Images
 
 on:
   push:
-    branches:
-      - main
-  workflow_dispatch: {} # allows manual run from Actions tab
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  REPO_OWNER: michael-grunewalder
+  BASE_TAG: latest
 
 jobs:
-  build-and-push:
+  build:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
 
+    strategy:
+      matrix:
+        service: [forge, comfyui, trainer]
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up QEMU (for multi-arch builds, optional)
-        uses: docker/setup-qemu-action@v3
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to GHCR
-        uses: docker/login-action@v2
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
         with:
-          registry: ghcr.io
+          registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_PAT }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push
+      - name: Build and push image
         uses: docker/build-push-action@v5
         with:
-          context: .
-          file: ./Dockerfile
+          context: ./${{ matrix.service }}
+          file: ./${{ matrix.service }}/Dockerfile
           push: true
-          tags: ghcr.io/michael-grunewalder/bearnys-ai-lab:latest
-          platforms: linux/amd64
-          # if you want cache across runs, you can add cache-from/cache-to steps
-
-      - name: Verify pushed image
-        run: |
-          echo "Image pushed: ghcr.io/michael-grunewalder/bearnys-ai-lab:latest"
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.REPO_OWNER }}/${{ matrix.service }}:${{ env.BASE_TAG }}
+            ${{ env.REGISTRY }}/${{ env.REPO_OWNER }}/${{ matrix.service }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          

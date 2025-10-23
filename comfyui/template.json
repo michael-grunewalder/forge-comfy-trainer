@@ -1,0 +1,13 @@
+{
+  "name": "Bearny's AI Lab - ComfyUI Node",
+  "image_name": "ghcr.io/michael-grunewalder/comfyui:latest",
+  "containerDiskGB": 20,
+  "volumeInGB": 100,
+  "volumeMountPath": "/workspace",
+  "gpuTypeId": "NVIDIA",
+  "ports": [
+    { "containerPort": 8188, "hostPort": 8188, "protocol": "tcp", "httpProxy": true, "path": "/" },
+    { "containerPort": 8888, "hostPort": 8888, "protocol": "tcp", "httpProxy": true, "path": "/lab" }
+  ],
+  "startCommand": "/opt/start.sh"
+}
