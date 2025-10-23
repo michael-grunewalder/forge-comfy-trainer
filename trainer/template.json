@@ -1,0 +1,13 @@
+{
+  "name": "Bearny's AI Lab - Trainer Node",
+  "image_name": "ghcr.io/michael-grunewalder/trainer:latest",
+  "containerDiskGB": 20,
+  "volumeInGB": 100,
+  "volumeMountPath": "/workspace",
+  "gpuTypeId": "NVIDIA",
+  "ports": [
+    { "containerPort": 7861, "hostPort": 7861, "protocol": "tcp", "httpProxy": true, "path": "/" },
+    { "containerPort": 8888, "hostPort": 8888, "protocol": "tcp", "httpProxy": true, "path": "/lab" }
+  ],
+  "startCommand": "/opt/start.sh"
+}
