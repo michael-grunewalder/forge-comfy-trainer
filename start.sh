@@ -3,6 +3,7 @@ set -euo pipefail
 
 # ===========================================================
 # 🧠  Bearny's AI Lab Startup Script
+# (keeps your version vars exactly)
 # ===========================================================
 APP_VERSION="${APP_VERSION:-v1.0.3s}"
 BUILD_DATE="$(date -u +'%Y-%m-%d %H:%M:%S UTC')"
@@ -13,42 +14,54 @@ echo "     Version: ${APP_VERSION}"
 echo "     Build:   ${BUILD_DATE}"
 echo "=============================================================="
 
-# === Paths ====================================================
+# ---------- Paths ----------
 VENV_DIR="/workspace/venv"
 TOOLS_DIR="/workspace/tools"
+APPS_DIR="/workspace/apps"
 SHARED="/workspace/shared"
 LOGS_DIR="${SHARED}/logs"
-mkdir -p "${LOGS_DIR}" "${TOOLS_DIR}"
+SHARED_MODELS="${SHARED}/models"
 
-# === Prepare venv =============================================
-echo "[Setup] Checking Python environment..."
+mkdir -p "${LOGS_DIR}" "${TOOLS_DIR}" "${APPS_DIR}" \
+         "${SHARED_MODELS}"/{checkpoints,vae,loras,controlnet,embeddings} \
+         "${SHARED}"/{outputs,configs}
+
+# ---------- Virtualenv (persistent) ----------
 if [ ! -d "$VENV_DIR" ]; then
-    echo "[Setup] Creating venv at $VENV_DIR..."
-    python3 -m venv "$VENV_DIR"
+  echo "[Setup] Creating venv at $VENV_DIR..."
+  python3 -m venv "$VENV_DIR"
 fi
-
+# shellcheck disable=SC1090
 source "$VENV_DIR/bin/activate"
+export PATH="$VENV_DIR/bin:$PATH"
 
 echo "[Setup] Upgrading base tools..."
 pip install -q --upgrade pip setuptools wheel
 
-# === Ensure Core Packages =====================================
-echo "[Setup] Ensuring essential Python libs..."
-pip install -q numpy==1.26.4 scipy==1.12.0 \
-    torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-pip install -q xformers==0.0.27.post2 jupyterlab==4.2.5 gradio==4.44.0 \
-    fastapi uvicorn einops opencv-python pillow==10.2.0 tqdm safetensors \
-    accelerate==0.34.2 bitsandbytes==0.45.3 pycairo tensorboard==2.17.1 joblib
+# ---------- GPU wheels at runtime (safe on RunPod) ----------
+echo "[Setup] Installing CUDA wheels (runtime)…"
+pip install -q --index-url https://download.pytorch.org/whl/cu121 \
+  torch==2.4.1+cu121 torchvision==0.19.1+cu121 torchaudio==2.4.1+cu121
+
+# ComfyUI/Transformers need these before anything else
+pip install -q numpy==1.26.4 scipy==1.12.0
+
+# Common stack (no heavy compile)
+pip install -q \
+  xformers==0.0.27.post2 \
+  jupyterlab==4.2.5 gradio==4.44.0 \
+  fastapi uvicorn einops opencv-python pillow==10.2.0 tqdm safetensors \
+  accelerate==0.34.2 bitsandbytes==0.45.3 pycairo tensorboard==2.17.1 joblib
 
 # ===========================================================
-# 🧩 Install CivitAI downloader (persistent across Pods)
+# 🧩 CivitAI downloader (persistent in /workspace/tools)
 # ===========================================================
 DL_SCRIPT="${TOOLS_DIR}/civitai-download.sh"
 BIN_LINK="/usr/local/bin/civitai-download"
 
 if [ ! -f "$DL_SCRIPT" ]; then
-    echo "[Setup] Installing CivitAI downloader..."
-    cat <<'EOF' > "$DL_SCRIPT"
+  echo "[Setup] Installing CivitAI downloader..."
+  cat <<'EOF' > "$DL_SCRIPT"
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -118,97 +131,89 @@ curl -L -C - \
 echo "✅ Done! Saved to $OUTPATH"
 EOF
 
-    chmod +x "$DL_SCRIPT"
-    ln -sf "$DL_SCRIPT" "$BIN_LINK"
-    echo "[OK] CivitAI downloader installed at $DL_SCRIPT"
+  chmod +x "$DL_SCRIPT"
+  ln -sf "$DL_SCRIPT" "$BIN_LINK"
+  echo "[OK] civitai-download installed at $DL_SCRIPT"
 else
-    echo "[Skip] CivitAI downloader already exists."
+  echo "[Skip] civitai-download already exists."
 fi
 
 # ===========================================================
-# 🧠  Start Applications
+# 🧠 Launch apps
 # ===========================================================
-echo "[Startup] Preparing applications..."
 
-# --- ComfyUI --------------------------------------------------
-COMFY_DIR="/workspace/apps/ComfyUI"
+# --- ComfyUI (share models via symlink) ---
+COMFY_DIR="${APPS_DIR}/ComfyUI"
 COMFY_MODELS="${COMFY_DIR}/models"
-SHARED_MODELS="/workspace/shared/models"
-
 if [ -d "$COMFY_DIR" ]; then
-    echo "[ComfyUI] Ensuring shared model links..."
-    mkdir -p "$SHARED_MODELS"
-
-    if [ -d "$COMFY_MODELS" ] && [ ! -L "$COMFY_MODELS" ]; then
-        echo "[ComfyUI] Replacing local models/ folder with symlink..."
-        rm -rf "$COMFY_MODELS"
-    fi
-
-    if [ ! -L "$COMFY_MODELS" ]; then
-        ln -s "$SHARED_MODELS" "$COMFY_MODELS"
-    fi
-
-    echo "[ComfyUI] Launching..."
-    cd "$COMFY_DIR"
-    nohup python main.py --listen 0.0.0.0 --port 8188 > "${LOGS_DIR}/comfyui.log" 2>&1 &
+  echo "[ComfyUI] Linking models -> ${SHARED_MODELS}"
+  if [ -d "$COMFY_MODELS" ] && [ ! -L "$COMFY_MODELS" ]; then
+    rm -rf "$COMFY_MODELS"
+  fi
+  if [ ! -L "$COMFY_MODELS" ]; then
+    ln -s "$SHARED_MODELS" "$COMFY_MODELS"
+  fi
+  echo "[ComfyUI] Launching on :8188"
+  cd "$COMFY_DIR"
+  nohup python main.py --listen 0.0.0.0 --port 8188 \
+    > "${LOGS_DIR}/comfyui.log" 2>&1 &
 else
-    echo "[ComfyUI] Directory missing, skipping."
+  echo "[ComfyUI] Skipping (not found at $COMFY_DIR)"
 fi
 
-# --- Jupyter --------------------------------------------------
-echo "[JupyterLab] Launching..."
+# --- JupyterLab ---
+echo "[JupyterLab] Launching on :8888"
 mkdir -p "${LOGS_DIR}/jupyter"
-nohup jupyter-lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root > "${LOGS_DIR}/jupyter/jupyter.log" 2>&1 &
+nohup jupyter-lab \
+  --ip=0.0.0.0 \
+  --port=8888 \
+  --no-browser \
+  --allow-root \
+  > "${LOGS_DIR}/jupyter/jupyter.log" 2>&1 &
 
-# ===========================================================
-# 🧩 Forge Auto-repair and Launch
-# ===========================================================
-FORGE_DIR="/workspace/apps/forge"
+# --- Forge (auto-repair + launch) ---
+FORGE_DIR="${APPS_DIR}/forge"
 mkdir -p "${LOGS_DIR}/forge"
-echo "[Forge] Preparing environment..."
-
 if [ -d "$FORGE_DIR" ]; then
-    cd "$FORGE_DIR"
-    echo "[Forge] Repairing dependencies..."
-    pip install -q joblib numpy==1.26.4 bitsandbytes==0.45.3 accelerate==0.34.2 safetensors==0.4.3
+  echo "[Forge] Repairing deps + pinning commit…"
+  cd "$FORGE_DIR"
+  # deps you installed manually yesterday
+  pip install -q joblib numpy==1.26.4 bitsandbytes==0.45.3 accelerate==0.34.2 safetensors==0.4.3
 
-    GOOD_COMMIT="dfdcbab685e57677014f05a3309b48cc87383167"
-    git fetch origin || true
-    git reset --hard "$GOOD_COMMIT" || true
+  GOOD_COMMIT="dfdcbab685e57677014f05a3309b48cc87383167"
+  git fetch origin || true
+  git reset --hard "$GOOD_COMMIT" || true
 
-    echo "[Forge] Launching..."
-    nohup python launch.py \
-      --listen \
-      --server-name 0.0.0.0 \
-      --port 7860 \
-      --xformers \
-      --api \
-      --skip-version-check \
-      --disable-nan-check \
-      --no-half \
-      --no-half-vae \
-      --enable-insecure-extension-access \
-      --ckpt-dir /workspace/shared/models/checkpoints \
-      --vae-dir /workspace/shared/models/vae \
-      --lora-dir /workspace/shared/models/loras \
-      --embeddings-dir /workspace/shared/models/embeddings \
-      --controlnet-dir /workspace/shared/models/controlnet \
-      --data-dir /workspace/shared/configs \
-      > "${LOGS_DIR}/forge/forge_autostart.log" 2>&1 &
+  echo "[Forge] Launching on :7860"
+  nohup python launch.py \
+    --listen \
+    --server-name 0.0.0.0 \
+    --port 7860 \
+    --xformers \
+    --api \
+    --skip-version-check \
+    --disable-nan-check \
+    --no-half \
+    --no-half-vae \
+    --enable-insecure-extension-access \
+    --ckpt-dir /workspace/shared/models/checkpoints \
+    --vae-dir /workspace/shared/models/vae \
+    --lora-dir /workspace/shared/models/loras \
+    --embeddings-dir /workspace/shared/models/embeddings \
+    --controlnet-dir /workspace/shared/models/controlnet \
+    --data-dir /workspace/shared/configs \
+    > "${LOGS_DIR}/forge/forge_autostart.log" 2>&1 &
 else
-    echo "[Forge] Directory missing, skipping launch."
+  echo "[Forge] Skipping (not found at $FORGE_DIR)"
 fi
 
-# ===========================================================
-# ✅ Final confirmation
-# ===========================================================
+# ---------- Done ----------
 echo "=============================================================="
 echo "✅ All startup installations complete!"
-echo "   Forge, ComfyUI, and JupyterLab are now launching."
-echo "   Logs available under: ${LOGS_DIR}/"
-echo
-echo "💡 To fetch models directly:"
-echo "      civitai-download <model_id>"
-echo
-echo "🕓 Wait until you see Forge UI on port 7860 and ComfyUI on 8188."
+echo "   • Forge      : 7860  (log: ${LOGS_DIR}/forge/forge_autostart.log)"
+echo "   • ComfyUI    : 8188  (log: ${LOGS_DIR}/comfyui.log)"
+echo "   • JupyterLab : 8888  (log: ${LOGS_DIR}/jupyter/jupyter.log)"
+echo "--------------------------------------------------------------"
+echo "Use: civitai-download <model_id>   (token in \$CIVITAI_TOKEN)"
+echo "Models dir: ${SHARED_MODELS}"
 echo "=============================================================="

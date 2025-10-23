@@ -1,11 +1,11 @@
 # ===========================================================
-# 🧠 Bearny's AI Lab - Dockerfile (fixed version)
+# 🧠 Bearny's AI Lab - Dockerfile (FINAL, with python:3.10-slim base)
 # ===========================================================
 
-FROM nvidia/cuda:12.2.2-devel-ubuntu22.04
+FROM python:3.10-slim AS base
 
-# --- metadata & build variables ---
-ARG IMAGE_VERSION="v1.1.0-cuda"
+# --- metadata & version info ---
+ARG IMAGE_VERSION="v1.0.0-FUCK_GPT"
 ENV APP_VERSION=${IMAGE_VERSION} \
     DEBIAN_FRONTEND=noninteractive \
     TZ=Etc/UTC \
@@ -13,50 +13,55 @@ ENV APP_VERSION=${IMAGE_VERSION} \
     PYTHONUNBUFFERED=1 \
     PATH="/opt/venv/bin:$PATH"
 
-# --- basic system setup ---
+# --- system packages ---
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 python3-venv python3-pip python3-dev git wget curl ffmpeg jq \
-    libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 tini \
+    git wget curl ffmpeg jq tini \
+    libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 python3-venv python3-dev build-essential \
  && rm -rf /var/lib/apt/lists/*
 
-# --- print version info during build ---
+# --- build banner (keep your version echo) ---
 RUN echo "🧩 Building SD Dev Image - ${APP_VERSION}"
 
-# --- create venv ---
+# ===========================================================
+# 🧠 Create venv & install minimal build-safe deps
+# (torch, xformers, bitsandbytes installed later in start.sh)
+# ===========================================================
 RUN python3 -m venv /opt/venv && \
     . /opt/venv/bin/activate && \
-    pip install --no-cache-dir --upgrade pip setuptools wheel
-
-# ===========================================================
-# IMPORTANT:
-# Do NOT install torch/xformers/bitsandbytes here.
-# These depend on runtime CUDA libraries which are only
-# available inside the RunPod container environment.
-# ===========================================================
-
-# --- lightweight base Python deps ---
-RUN . /opt/venv/bin/activate && \
+    pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir \
         jupyterlab==4.2.5 \
         gradio==4.44.0 \
-        fastapi uvicorn tqdm pillow==10.2.0 \
-        opencv-python safetensors pycairo \
-        tensorboard==2.17.1 einops && \
-    rm -rf /root/.cache/pip
+        fastapi \
+        uvicorn \
+        tqdm \
+        pillow==10.2.0 \
+        opencv-python \
+        safetensors \
+        einops \
+        pycairo \
+        numpy \
+ && rm -rf /root/.cache/pip
 
-# --- copy runtime scripts ---
+# ===========================================================
+# GPU-dependent libs (torch, torchvision, torchaudio, xformers,
+# bitsandbytes, accelerate, tensorboard) are installed at runtime
+# inside /workspace/venv in start.sh
+# ===========================================================
+
+# --- copy runtime startup script ---
 COPY start.sh /opt/start.sh
 RUN chmod +x /opt/start.sh
 
 # --- working directory ---
 WORKDIR /workspace
 
-# --- labels for traceability ---
+# --- metadata labels ---
 LABEL org.opencontainers.image.title="Bearny's AI Lab" \
       org.opencontainers.image.version="${APP_VERSION}" \
-      org.opencontainers.image.description="RunPod template for Forge UI + ComfyUI + JupyterLab" \
+      org.opencontainers.image.description="RunPod Forge + ComfyUI + JupyterLab unified environment" \
       org.opencontainers.image.created="${IMAGE_VERSION}"
 
-# --- entrypoint ---
+# --- entrypoint & default command ---
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["/opt/start.sh"]
