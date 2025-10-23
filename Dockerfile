@@ -5,7 +5,7 @@
 
 FROM python:3.10-slim
 
-ARG IMAGE_VERSION="v1.0.2"
+ARG IMAGE_VERSION="v1.0.3"
 ENV APP_VERSION=${IMAGE_VERSION} \
     DEBIAN_FRONTEND=noninteractive \
     VENV_PATH=/workspace/venv \

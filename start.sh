@@ -2,7 +2,7 @@
 set -euo pipefail
 
 BUILD_DATE="$(date -u +'%Y-%m-%d %H:%M:%S UTC')"
-VERSION="${APP_VERSION:-v1.0.s}"
+VERSION="${APP_VERSION:-v1.0.3s}"
 
 
 echo "=============================================================="
@@ -88,10 +88,18 @@ echo "[Launch] Starting services..."
 echo "--------------------------------------------------------------"
 
 # JupyterLab
-nohup "$PY" -m jupyterlab --ip=0.0.0.0 --port=8888 --no-browser \
-  --NotebookApp.token='' --NotebookApp.password='' \
+nohup "$PY" -m jupyterlab \
+  --ip=0.0.0.0 \
+  --port=8888 \
+  --no-browser \
+  --ServerApp.allow_origin='*' \
+  --ServerApp.allow_remote_access=True \
+  --ServerApp.allow_root=True \
+  --ServerApp.disable_check_xsrf=True \
+  --ServerApp.token='' \
+  --ServerApp.password='' \
   > "$LOGDIR/jupyter.log" 2>&1 &
-
+  
 # ComfyUI
 cd "$COMFY_DIR"
 nohup "$PY" main.py --listen 0.0.0.0 --port 8188 \
