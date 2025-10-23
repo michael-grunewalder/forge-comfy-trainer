@@ -1,13 +1,20 @@
 {
-  "name": "Bearny's AI Lab - Trainer Node",
-  "image_name": "ghcr.io/michael-grunewalder/trainer:latest",
-  "containerDiskGB": 20,
-  "volumeInGB": 100,
-  "volumeMountPath": "/workspace",
-  "gpuTypeId": "NVIDIA",
-  "ports": [
-    { "containerPort": 7861, "hostPort": 7861, "protocol": "tcp", "httpProxy": true, "path": "/" },
-    { "containerPort": 8888, "hostPort": 8888, "protocol": "tcp", "httpProxy": true, "path": "/lab" }
+  "name": "KohyaSS Trainer + Jupyter",
+  "description": "KohyaSS training environment with shared model directory and JupyterLab preinstalled for dataset preparation and LoRA training.",
+  "image": "ghcr.io/michael-grunewalder/trainer:latest",
+  "port": 7861,
+  "startScript": "/workspace/Apps/Trainer/start.sh",
+  "volumeMounts": [
+    { "containerPath": "/workspace", "hostPath": "/workspace" }
   ],
-  "startCommand": "/opt/start.sh"
+  "env": {
+    "START_JUPYTER": "true"
+  },
+  "ports": [
+    { "containerPort": 7861, "protocol": "http" },
+    { "containerPort": 8890, "protocol": "http" }
+  ],
+  "defaultVolumeSizeGb": 50,
+  "defaultGpu": "A6000",
+  "categories": ["Training", "KohyaSS", "LoRA"]
 }

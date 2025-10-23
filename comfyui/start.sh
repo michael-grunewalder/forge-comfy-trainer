@@ -1,58 +1,51 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -e
 
-# ========== Bearny's AI Lab ==========
-BUILD_DATE="$(date -u +'%Y-%m-%d %H:%M:%S UTC')"
-VERSION="${APP_VERSION:-v1.0.0}"
-echo "=============================================================="
-echo " 🧠  Bearny's AI Lab - ComfyUI Node"
-echo "     Version: $VERSION"
-echo "     Build:   $BUILD_DATE"
-echo "=============================================================="
+log_info()    { echo -e "\033[1;33m[INFO]\033[0m $1"; }
+log_success() { echo -e "\033[1;32m[SUCCESS]\033[0m $1"; }
+log_error()   { echo -e "\033[1;31m[ERROR]\033[0m $1"; }
 
-# ---------- Directories ----------
-COMFY_DIR="/workspace/comfyui"
-SHARED_MODELS="/workspace/shared/models"
-LOGDIR="/workspace/shared/logs"
-mkdir -p "$COMFY_DIR" "$SHARED_MODELS" "$LOGDIR"
+APP_PATH="/workspace/Apps/ComfyUI"
+PYTHON_PATH="/workspace/Python/ComfyUI"
+SHARED_MODELS="/workspace/Shared/models"
+JUPYTER_PORT=8888
+START_JUPYTER=${START_JUPYTER:-true}
 
-# ---------- Clone ComfyUI if missing ----------
-if [ ! -d "$COMFY_DIR/.git" ]; then
-  echo "[Setup] Cloning ComfyUI..."
-  git clone https://github.com/comfyanonymous/ComfyUI.git "$COMFY_DIR"
+log_info "Starting ComfyUI container..."
+mkdir -p "$APP_PATH" "$PYTHON_PATH" "$SHARED_MODELS"
+
+# ---------- Python setup ----------
+if [ ! -d "$PYTHON_PATH/bin" ]; then
+  log_info "Setting up Python environment..."
+  python3 -m venv "$PYTHON_PATH"
+  source "$PYTHON_PATH/bin/activate"
+  pip install --upgrade pip jupyterlab
+  log_success "Python environment ready."
 else
-  echo "[Setup] ComfyUI already present, skipping clone."
+  source "$PYTHON_PATH/bin/activate"
+  pip install -q jupyterlab
+  log_success "Reusing cached Python environment."
 fi
 
-# ---------- Install or update ComfyUI-Manager ----------
-cd "$COMFY_DIR/custom_nodes"
-if [ ! -d "ComfyUI-Manager" ]; then
-  echo "[Setup] Installing ComfyUI-Manager..."
-  git clone https://github.com/ltdrdata/ComfyUI-Manager.git
+# ---------- App setup ----------
+if [ ! -d "$APP_PATH/.git" ]; then
+  log_info "Installing ComfyUI + Manager..."
+  git clone https://github.com/comfyanonymous/ComfyUI.git "$APP_PATH"
+  git clone https://github.com/ltdrdata/ComfyUI-Manager.git "$APP_PATH/custom_nodes/ComfyUI-Manager"
+  log_success "ComfyUI installed."
 else
-  echo "[Setup] Updating ComfyUI-Manager..."
-  cd ComfyUI-Manager && git pull && cd ..
+  log_success "Reusing cached ComfyUI installation."
 fi
 
-# ---------- Symlink models ----------
-ln -sf "$SHARED_MODELS" "$COMFY_DIR/models"
+# ---------- Start services ----------
+if [ "$START_JUPYTER" = true ]; then
+  log_info "Launching JupyterLab on port ${JUPYTER_PORT}..."
+  nohup jupyter lab --ip=0.0.0.0 --port=${JUPYTER_PORT} --NotebookApp.token='' --NotebookApp.password='' --no-browser > /workspace/jupyter.log 2>&1 &
+else
+  log_info "Skipping JupyterLab startup (START_JUPYTER=false)."
+fi
 
-# ---------- Launch background services ----------
-echo "[Start] Launching JupyterLab..."
-nohup jupyter-lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root \
-  > "$LOGDIR/jupyter.log" 2>&1 &
-
-echo "[Start] Launching ComfyUI..."
-cd "$COMFY_DIR"
-nohup python main.py --listen 0.0.0.0 --port 8188 > "$LOGDIR/comfyui.log" 2>&1 &
-
-# ---------- Final message ----------
-sleep 5
-echo "✅ ComfyUI + Manager + Jupyter are running."
-echo "   → ComfyUI:   http://<pod-address>:8188"
-echo "   → Jupyter:   http://<pod-address>:8888/lab"
-echo "Logs in: $LOGDIR"
-echo "=============================================================="
-
-# Keep container alive
-tail -f /dev/null
+log_info "Launching ComfyUI on port 8188..."
+export COMFYUI_MODELS_PATH="$SHARED_MODELS"
+cd "$APP_PATH"
+python main.py --listen 0.0.0.0 --port 8188

@@ -1,40 +1,20 @@
-# ---------- Base ----------
-FROM python:3.10-slim
-
-ARG IMAGE_VERSION="v1.0.0"
-ENV APP_VERSION=${IMAGE_VERSION} \
-    DEBIAN_FRONTEND=noninteractive \
-    PYTHONUNBUFFERED=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
-
-# ---------- System packages ----------
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    git wget curl ca-certificates ffmpeg libsm6 libxext6 \
-    && rm -rf /var/lib/apt/lists/*
-
-# ---------- Virtual environment ----------
-RUN python3 -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
-
-# ---------- Python dependencies ----------
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir \
-        torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 && \
-    pip install --no-cache-dir \
-        xformers==0.0.27.post2 \
-        jupyterlab==4.2.5 \
-        tqdm pillow==10.2.0 opencv-python \
-        fastapi uvicorn aiofiles safetensors einops numpy \
-        transformers==4.44.2 && \
-    rm -rf /root/.cache/pip
-
-# ---------- Directories ----------
-RUN mkdir -p /workspace /opt/scripts
+FROM nvidia/cuda:12.1.1-base-ubuntu22.04
+ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /workspace
 
-# ---------- Copy startup script ----------
-COPY start.sh /opt/start.sh
-RUN chmod +x /opt/start.sh
+RUN apt-get update && apt-get install -y \
+    python3 python3-venv python3-pip git wget curl unzip && \
+    rm -rf /var/lib/apt/lists/*
 
-# ---------- Entrypoint ----------
-CMD ["/opt/start.sh"]
+ENV APP_PATH=/workspace/Apps/ComfyUI \
+    PYTHON_PATH=/workspace/Python/ComfyUI \
+    SHARED_MODELS=/workspace/Shared/models \
+    TOOLS_PATH=/workspace/tools
+
+RUN mkdir -p $APP_PATH $PYTHON_PATH $SHARED_MODELS $TOOLS_PATH
+
+COPY start.sh /workspace/Apps/ComfyUI/start.sh
+RUN chmod +x /workspace/Apps/ComfyUI/start.sh
+
+EXPOSE 8188 8888
+CMD ["/workspace/Apps/ComfyUI/start.sh"]

@@ -1,70 +1,44 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -e
+log_info()    { echo -e "\033[1;33m[INFO]\033[0m $1"; }
+log_success() { echo -e "\033[1;32m[SUCCESS]\033[0m $1"; }
 
-# ==============================================================
-# 🧠  Bearny's AI Lab - Forge Node
-# ==============================================================
+APP_PATH="/workspace/Apps/Forge"
+PYTHON_PATH="/workspace/Python/Forge"
+SHARED_MODELS="/workspace/Shared/models"
+JUPYTER_PORT=8889
+START_JUPYTER=${START_JUPYTER:-true}
 
-BUILD_DATE="$(date -u +'%Y-%m-%d %H:%M:%S UTC')"
-VERSION="${APP_VERSION:-v1.0.0}"
-echo "=============================================================="
-echo " 🧠  Bearny's AI Lab - Forge Node"
-echo "     Version: $VERSION"
-echo "     Build:   $BUILD_DATE"
-echo "=============================================================="
+log_info "Starting Forge container..."
+mkdir -p "$APP_PATH" "$PYTHON_PATH" "$SHARED_MODELS"
 
-# ---------- Directories ----------
-FORGE_DIR="/workspace/forge"
-SHARED_MODELS="/workspace/shared/models"
-LOGDIR="/workspace/shared/logs"
-mkdir -p "$FORGE_DIR" "$SHARED_MODELS" "$LOGDIR"
-
-# ---------- Clone Forge if missing ----------
-if [ ! -d "$FORGE_DIR/.git" ]; then
-  echo "[Setup] Cloning Forge WebUI..."
-  git clone https://github.com/lllyasviel/stable-diffusion-webui-forge.git "$FORGE_DIR"
+if [ ! -d "$PYTHON_PATH/bin" ]; then
+  log_info "Setting up Python environment..."
+  python3 -m venv "$PYTHON_PATH"
+  source "$PYTHON_PATH/bin/activate"
+  pip install --upgrade pip jupyterlab
+  log_success "Python environment ready."
 else
-  echo "[Setup] Forge already present, pulling latest..."
-  cd "$FORGE_DIR" && git pull && cd -
+  source "$PYTHON_PATH/bin/activate"
+  pip install -q jupyterlab
+  log_success "Reusing cached Python environment."
 fi
 
-# ---------- Symlink shared models ----------
-ln -sf "$SHARED_MODELS" "$FORGE_DIR/models"
-ln -sf "$SHARED_MODELS/checkpoints" "$FORGE_DIR/models/Stable-diffusion"
-ln -sf "$SHARED_MODELS/vae" "$FORGE_DIR/models/VAE"
-ln -sf "$SHARED_MODELS/loras" "$FORGE_DIR/models/Lora"
-ln -sf "$SHARED_MODELS/embeddings" "$FORGE_DIR/embeddings"
+if [ ! -d "$APP_PATH/.git" ]; then
+  log_info "Installing Forge..."
+  git clone https://github.com/lllyasviel/stable-diffusion-webui-forge.git "$APP_PATH"
+  log_success "Forge installed."
+else
+  log_success "Reusing cached Forge installation."
+fi
 
-# ---------- Dependencies ----------
-cd "$FORGE_DIR"
-echo "[Setup] Installing Forge dependencies..."
-/opt/venv/bin/pip install --no-cache-dir -r requirements.txt || true
+if [ "$START_JUPYTER" = true ]; then
+  log_info "Launching JupyterLab on port ${JUPYTER_PORT}..."
+  nohup jupyter lab --ip=0.0.0.0 --port=${JUPYTER_PORT} --NotebookApp.token='' --NotebookApp.password='' --no-browser > /workspace/jupyter.log 2>&1 &
+else
+  log_info "Skipping JupyterLab startup (START_JUPYTER=false)."
+fi
 
-# ---------- Launch background services ----------
-echo "[Start] Launching JupyterLab..."
-nohup jupyter-lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root \
-  > "$LOGDIR/jupyter.log" 2>&1 &
-
-echo "[Start] Launching Forge WebUI..."
-nohup python launch.py \
-  --listen --server-name 0.0.0.0 --port 7860 \
-  --xformers --api --skip-version-check \
-  --disable-nan-check --no-half --no-half-vae \
-  --enable-insecure-extension-access \
-  --ckpt-dir "$SHARED_MODELS/checkpoints" \
-  --vae-dir "$SHARED_MODELS/vae" \
-  --lora-dir "$SHARED_MODELS/loras" \
-  --embeddings-dir "$SHARED_MODELS/embeddings" \
-  --controlnet-dir "$SHARED_MODELS/controlnet" \
-  > "$LOGDIR/forge.log" 2>&1 &
-
-# ---------- Final message ----------
-sleep 5
-echo "✅ Forge + Jupyter are running."
-echo "   → Forge:   http://<pod-address>:7860"
-echo "   → Jupyter: http://<pod-address>:8888/lab"
-echo "Logs in: $LOGDIR"
-echo "=============================================================="
-
-# Keep container alive
-tail -f /dev/null
+cd "$APP_PATH"
+log_info "Launching Forge on port 7860..."
+python launch.py --listen 0.0.0.0 --port 7860 --data-dir "$SHARED_MODELS" --no-half-vae

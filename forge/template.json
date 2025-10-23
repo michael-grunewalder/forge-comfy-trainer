@@ -1,13 +1,20 @@
 {
-  "name": "Bearny's AI Lab - Forge Node",
-  "image_name": "ghcr.io/michael-grunewalder/forge:latest",
-  "containerDiskGB": 20,
-  "volumeInGB": 100,
-  "volumeMountPath": "/workspace",
-  "gpuTypeId": "NVIDIA",
-  "ports": [
-    { "containerPort": 7860, "hostPort": 7860, "protocol": "tcp", "httpProxy": true, "path": "/" },
-    { "containerPort": 8888, "hostPort": 8888, "protocol": "tcp", "httpProxy": true, "path": "/lab" }
+  "name": "Forge + FLUX + Jupyter",
+  "description": "Forge Web UI with FLUX support and integrated JupyterLab. Uses shared model directory for all checkpoints and LoRA files.",
+  "image": "ghcr.io/michael-grunewalder/forge:latest",
+  "port": 7860,
+  "startScript": "/workspace/Apps/Forge/start.sh",
+  "volumeMounts": [
+    { "containerPath": "/workspace", "hostPath": "/workspace" }
   ],
-  "startCommand": "/opt/start.sh"
+  "env": {
+    "START_JUPYTER": "true"
+  },
+  "ports": [
+    { "containerPort": 7860, "protocol": "http" },
+    { "containerPort": 8889, "protocol": "http" }
+  ],
+  "defaultVolumeSizeGb": 50,
+  "defaultGpu": "A6000",
+  "categories": ["Stable Diffusion", "FLUX", "Forge"]
 }
