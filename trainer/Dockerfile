@@ -14,8 +14,8 @@ ENV APP_PATH=/workspace/Apps/Trainer \
 
 RUN mkdir -p $APP_PATH $PYTHON_PATH $SHARED_MODELS $TOOLS_PATH
 
-# --- FIX: include shared tools folder ---
-COPY ../tools /workspace/tools
+# FIX: copy tools from repo root
+COPY tools /workspace/tools
 
 COPY start.sh /workspace/Apps/Trainer/start.sh
 RUN chmod +x /workspace/Apps/Trainer/start.sh

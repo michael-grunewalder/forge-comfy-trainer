@@ -12,13 +12,11 @@ ENV APP_PATH=/workspace/Apps/ComfyUI \
     SHARED_MODELS=/workspace/Shared/models \
     TOOLS_PATH=/workspace/tools
 
-# Create all base directories
 RUN mkdir -p $APP_PATH $PYTHON_PATH $SHARED_MODELS $TOOLS_PATH
 
-# --- FIX: include the shared tools folder ---
-COPY ../tools /workspace/tools
+# FIX: copy tools from repo root (context is repo root via Action)
+COPY tools /workspace/tools
 
-# Copy module launcher
 COPY start.sh /workspace/Apps/ComfyUI/start.sh
 RUN chmod +x /workspace/Apps/ComfyUI/start.sh
 

@@ -38,7 +38,7 @@ jobs:
       - name: Build and push image
         uses: docker/build-push-action@v5
         with:
-          context: ./${{ matrix.service }}
+          context: ./                         # <-- FIX: whole repo so /tools is visible
           file: ./${{ matrix.service }}/Dockerfile
           push: true
           tags: |
@@ -46,4 +46,3 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.REPO_OWNER }}/${{ matrix.service }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          
