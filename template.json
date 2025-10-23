@@ -34,15 +34,15 @@
       }
     },
     {
-      "containerPort": 8188,
-      "hostPort": 8188,
+      "containerPort": 8888,
+      "hostPort": 8888,  
       "protocol": "tcp",
       "httpProxy": true,
-      "path": "/",
+      "path": "/lab",
       "readinessProbe": {
-        "path": "/",
-        "port": 8188,
-        "initialDelaySeconds": 10,
+        "path": "/lab",
+        "port": 8888,
+        "initialDelaySeconds": 15,
         "periodSeconds": 10,
         "timeoutSeconds": 5
       }
