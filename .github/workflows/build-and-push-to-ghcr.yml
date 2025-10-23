@@ -38,7 +38,7 @@ jobs:
       - name: Build and push image
         uses: docker/build-push-action@v5
         with:
-          context: ./                         # <-- FIX: whole repo so /tools is visible
+          context: ./                       # repo root so /tools is visible
           file: ./${{ matrix.service }}/Dockerfile
           push: true
           tags: |

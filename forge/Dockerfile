@@ -1,5 +1,4 @@
 FROM nvidia/cuda:12.1.1-base-ubuntu22.04
-
 ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /workspace
 
@@ -14,10 +13,8 @@ ENV APP_PATH=/workspace/Apps/Forge \
 
 RUN mkdir -p $APP_PATH $PYTHON_PATH $SHARED_MODELS $TOOLS_PATH
 
-# FIX: copy tools from repo root
 COPY tools /workspace/tools
-
-COPY start.sh /workspace/Apps/Forge/start.sh
+COPY forge/start.sh /workspace/Apps/Forge/start.sh
 RUN chmod +x /workspace/Apps/Forge/start.sh
 
 EXPOSE 7860 8889
