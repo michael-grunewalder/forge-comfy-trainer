@@ -56,16 +56,31 @@ else
   echo "[Setup] Forge already installed."
 fi
 
-# ---------- ComfyUI ----------
-COMFY_DIR="$APPS_DIR/ComfyUI"
-if [ ! -d "$COMFY_DIR/.git" ]; then
-  echo "[Setup] Installing ComfyUI..."
-  git clone --depth=1 https://github.com/comfyanonymous/ComfyUI.git "$COMFY_DIR"
-  if [ -f "$COMFY_DIR/requirements.txt" ]; then
-    $PIP install --no-cache-dir -r "$COMFY_DIR/requirements.txt" || true
-  fi
+# --- ComfyUI --------------------------------------------------
+COMFY_DIR="/workspace/apps/ComfyUI"
+COMFY_MODELS="${COMFY_DIR}/models"
+SHARED_MODELS="/workspace/shared/models"
+
+if [ -d "$COMFY_DIR" ]; then
+    echo "[ComfyUI] Ensuring shared model links..."
+    mkdir -p "$SHARED_MODELS"
+
+    # Remove old folder if it's not a symlink
+    if [ -d "$COMFY_MODELS" ] && [ ! -L "$COMFY_MODELS" ]; then
+        echo "[ComfyUI] Replacing local models/ folder with symlink..."
+        rm -rf "$COMFY_MODELS"
+    fi
+
+    # Create symlink to shared models if not exists
+    if [ ! -L "$COMFY_MODELS" ]; then
+        ln -s "$SHARED_MODELS" "$COMFY_MODELS"
+    fi
+
+    echo "[ComfyUI] Launching..."
+    cd "$COMFY_DIR"
+    nohup python main.py --listen 0.0.0.0 --port 8188 > "${LOGS_DIR}/comfyui.log" 2>&1 &
 else
-  echo "[Setup] ComfyUI already installed."
+    echo "[ComfyUI] Directory missing, skipping."
 fi
 
 # ---------- ComfyUI Manager ----------
@@ -101,9 +116,9 @@ nohup "$PY" -m jupyterlab \
   > "$LOGDIR/jupyter.log" 2>&1 &
   
 # ComfyUI
-cd "$COMFY_DIR"
-nohup "$PY" main.py --listen 0.0.0.0 --port 8188 \
-  > "$LOGDIR/comfyui.log" 2>&1 &
+#cd "$COMFY_DIR"
+#nohup "$PY" main.py --listen 0.0.0.0 --port 8188 \
+#  > "$LOGDIR/comfyui.log" 2>&1 &
 
 # Forge
 cd "$FORGE_DIR"
