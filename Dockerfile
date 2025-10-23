@@ -1,75 +1,62 @@
 # ===========================================================
-# 🧠  Bearny's AI Lab - RunPod Image
-# Slim base, installs Python + CUDA via PyTorch wheels
+# 🧠 Bearny's AI Lab - Dockerfile (fixed version)
 # ===========================================================
-ARG IMAGE_VERSION="v1.1.0"
-FROM python:3.10-slim AS base
 
-LABEL maintainer="Michael Grunewalder"
+FROM nvidia/cuda:12.2.2-devel-ubuntu22.04
+
+# --- metadata & build variables ---
+ARG IMAGE_VERSION="v1.1.0-cuda"
 ENV APP_VERSION=${IMAGE_VERSION} \
     DEBIAN_FRONTEND=noninteractive \
-    TZ=UTC \
+    TZ=Etc/UTC \
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONUNBUFFERED=1 \
     PATH="/opt/venv/bin:$PATH"
 
-# -----------------------------------------------------------
-# 🔧 Base OS setup
-# -----------------------------------------------------------
-RUN echo "🧩 Building SD Dev Image - ${APP_VERSION}" && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends \
-        git wget curl ca-certificates \
-        ffmpeg libsm6 libxext6 libgl1 \
-        tini bash jq git-lfs vim \
-        build-essential pkg-config && \
-    git lfs install && \
-    rm -rf /var/lib/apt/lists/*
+# --- basic system setup ---
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-venv python3-pip python3-dev git wget curl ffmpeg jq \
+    libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 tini \
+ && rm -rf /var/lib/apt/lists/*
 
-# -----------------------------------------------------------
-# 🧱 Create basic structure
-# -----------------------------------------------------------
-WORKDIR /opt
-RUN mkdir -p /workspace/shared /workspace/tools /workspace/apps /workspace/venv
+# --- print version info during build ---
+RUN echo "🧩 Building SD Dev Image - ${APP_VERSION}"
 
-# -----------------------------------------------------------
-# 🐍 Install minimal Python deps
-# -----------------------------------------------------------
+# --- create venv ---
 RUN python3 -m venv /opt/venv && \
     . /opt/venv/bin/activate && \
-    pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir torch torchvision torchaudio \
-        --index-url https://download.pytorch.org/whl/cu121 && \
-    pip install --no-cache-dir xformers==0.0.27.post2 \
-        jupyterlab==4.2.5 gradio==4.44.0 fastapi uvicorn \
-        opencv-python pillow==10.2.0 tqdm safetensors accelerate==0.34.2 \
-        bitsandbytes==0.45.3 einops pycairo tensorboard==2.17.1 && \
+    pip install --no-cache-dir --upgrade pip setuptools wheel
+
+# ===========================================================
+# IMPORTANT:
+# Do NOT install torch/xformers/bitsandbytes here.
+# These depend on runtime CUDA libraries which are only
+# available inside the RunPod container environment.
+# ===========================================================
+
+# --- lightweight base Python deps ---
+RUN . /opt/venv/bin/activate && \
+    pip install --no-cache-dir \
+        jupyterlab==4.2.5 \
+        gradio==4.44.0 \
+        fastapi uvicorn tqdm pillow==10.2.0 \
+        opencv-python safetensors pycairo \
+        tensorboard==2.17.1 einops && \
     rm -rf /root/.cache/pip
 
-# -----------------------------------------------------------
-# 🧩 Copy startup script
-# -----------------------------------------------------------
+# --- copy runtime scripts ---
 COPY start.sh /opt/start.sh
 RUN chmod +x /opt/start.sh
 
-# -----------------------------------------------------------
-# 🧩 Environment defaults
-# -----------------------------------------------------------
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV FORCE_CUDA=1
-ENV TORCH_CUDA_ARCH_LIST="8.6 8.9"
-ENV LD_LIBRARY_PATH="/usr/local/cuda/lib64:$LD_LIBRARY_PATH"
+# --- working directory ---
+WORKDIR /workspace
 
-# -----------------------------------------------------------
-# 🧩 Volume Mounts
-# -----------------------------------------------------------
-VOLUME ["/workspace"]
+# --- labels for traceability ---
+LABEL org.opencontainers.image.title="Bearny's AI Lab" \
+      org.opencontainers.image.version="${APP_VERSION}" \
+      org.opencontainers.image.description="RunPod template for Forge UI + ComfyUI + JupyterLab" \
+      org.opencontainers.image.created="${IMAGE_VERSION}"
 
-# -----------------------------------------------------------
-# 🧩 Entrypoint
-# -----------------------------------------------------------
-ENTRYPOINT ["/usr/bin/tini", "--", "/opt/start.sh"]
-
-# -----------------------------------------------------------
-# 🧠 Final info
-# -----------------------------------------------------------
-RUN echo "✅ Bearny's AI Lab Docker image ready (v${APP_VERSION})"
+# --- entrypoint ---
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["/opt/start.sh"]
