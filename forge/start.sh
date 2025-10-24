@@ -48,9 +48,22 @@ else
 fi
 
 # 4) Launch (Forge expects boolean --listen; do NOT pass 0.0.0.0)
-export MODEL_PATH="$SHARED_MODELS"
-cd "$APP_PATH"
+# export MODEL_PATH="$SHARED_MODELS"
+# cd "$APP_PATH"
 
-log "Launching Forge on 7860… (first run may pip-install inside venv)"
+#log "Launching Forge on 7860… (first run may pip-install inside venv)"
+#exec python launch.py --listen --port 7860 \
+#     --data-dir "$SHARED_MODELS" --no-half-vae
+# Setze DATA_ROOT auf den übergeordneten Ordner /workspace/Shared
+export DATA_ROOT="/workspace/Shared"
+
 exec python launch.py --listen --port 7860 \
-     --data-dir "$SHARED_MODELS" --no-half-vae
+     --data-dir "$DATA_ROOT" \
+     --ckpt-dir "$DATA_ROOT/models" \
+     --vae-dir "$DATA_ROOT/vae" \
+     --lora-dir "$DATA_ROOT/lora" \
+     --clip-dir "$DATA_ROOT/clip" \
+     --no-half-vae \
+     --precision full \
+     --skip-version-check
+     
