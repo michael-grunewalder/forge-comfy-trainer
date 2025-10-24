@@ -57,12 +57,11 @@ cd "$APP_PATH"
 # Setze DATA_ROOT auf den übergeordneten Ordner /workspace/Shared
 export DATA_ROOT="/workspace/Shared"
 
+log "Launching Forge on 7860… (first run may pip-install inside venv)"
 exec python launch.py --listen --port 7860 \
      --data-dir "$DATA_ROOT" \
-     --ckpt-dir "$DATA_ROOT/models" \
-     --vae-dir "$DATA_ROOT/vae" \
-     --lora-dir "$DATA_ROOT/lora" \
-     --clip-dir "$DATA_ROOT/clip" \
      --no-half-vae \
-     --precision full \
+     --opt-sdp-attention \
+     --upcast-sampling \
+     --disable-nan-check \
      --skip-version-check
