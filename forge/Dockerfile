@@ -12,12 +12,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     net-tools iproute2 procps tini \
  && rm -rf /var/lib/apt/lists/*
 
+# WICHTIGE ANPASSUNGEN (SDXL-Optimierungen in FORGE_ARGS)
 ENV APP_NAME=Forge \
     APP_PATH=/workspace/Apps/Forge \
     PY_PATH=/workspace/Python/Forge \
-    SHARED_MODELS=/workspace/Shared/models \
+    SHARED_MODELS=/workspace/Shared/modules \
     TOOLS_PATH=/workspace/tools \
-    START_JUPYTER=true
+    START_JUPYTER=true \
+    # SDXL-Optimierte Argumente für Stabilität (gegen NaN- und OOM-Fehler):
+    FORGE_ARGS="--medvram --no-half-vae --upcast-sampling --opt-sdp-attention --disable-nan-check"
 
 COPY tools /workspace/tools
 COPY forge/start.sh /opt/start.sh

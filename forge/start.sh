@@ -8,12 +8,19 @@ err() { printf "\033[1;31m[ERROR]\033[0m %s\n" "$*"; }
 APP_NAME="${APP_NAME:-Forge}"
 APP_PATH="${APP_PATH:-/workspace/Apps/Forge}"
 PY_PATH="${PY_PATH:-/workspace/Python/Forge}"
-SHARED_MODELS="${SHARED_MODELS:-/workspace/Shared}"
+# KORRIGIERT: Setze Default auf den erwarteten vollen Pfad
+SHARED_MODELS="${SHARED_MODELS:-/workspace/Shared/modules}"
 TOOLS_PATH="${TOOLS_PATH:-/workspace/tools}"
 JUPYTER_PORT="${JUPYTER_PORT:-8889}"
 START_JUPYTER="${START_JUPYTER:-true}"
+FORGE_ARGS="${FORGE_ARGS:-}" # NEU: Nimmt die Argumente aus der Dockerfile
 
-mkdir -p "$TOOLS_PATH" "$APP_PATH" "$PY_PATH" "$SHARED_MODELS"
+# DEFINITION DES GEMEINSAMEN WURZELPFADES FÜR FORGE
+# Forge sucht alle Ordner (models, vae, lora, ...) relativ zu diesem Pfad.
+DATA_ROOT="/workspace/Shared"
+
+# Stelle sicher, dass die Modelle-Ordner existieren
+mkdir -p "$TOOLS_PATH" "$APP_PATH" "$PY_PATH" "$DATA_ROOT/models" "$DATA_ROOT/vae" "$DATA_ROOT/lora"
 
 # 1) Python venv
 if [[ ! -x "$PY_PATH/bin/python3" ]]; then
@@ -37,31 +44,24 @@ else
   ok "Reusing Forge repo."
 fi
 
-# 3) Optional Jupyter
+# 3) Install requirements & Update
+log "Installing/Updating Forge requirements…"
+cd "$APP_PATH"
+pip install -r requirements.txt
+ok "Requirements ready."
+
+# 4) Optional Jupyter
 if [[ "$START_JUPYTER" == "true" ]]; then
   log "Starting JupyterLab on ${JUPYTER_PORT}…"
-  nohup jupyter lab --ip=0.0.0.0 --port="${JUPYTER_PORT}" \
-        --NotebookApp.token='' --NotebookApp.password='' --no-browser \
-        > /workspace/jupyter.log 2>&1 &
-else
-  log "Jupyter disabled (START_JUPYTER=false)."
+  nohup jupyter lab --ip=0.0.0.0 --port "$JUPYTER_PORT" --allow-root --no-browser > "$TOOLS_PATH/jupyter.log" 2>&1 &
+  ok "JupyterLab running on port ${JUPYTER_PORT}."
 fi
 
-# 4) Launch (Forge expects boolean --listen; do NOT pass 0.0.0.0)
-# export MODEL_PATH="$SHARED_MODELS"
-cd "$APP_PATH"
-
-#log "Launching Forge on 7860… (first run may pip-install inside venv)"
-#exec python launch.py --listen --port 7860 \
-#     --data-dir "$SHARED_MODELS" --no-half-vae
-# Setze DATA_ROOT auf den übergeordneten Ordner /workspace/Shared
-export DATA_ROOT="/workspace/Shared"
-
+# 5) Launch
+# Das --data-dir Argument ist entscheidend für das Teilen der Modelle
 log "Launching Forge on 7860… (first run may pip-install inside venv)"
 exec python launch.py --listen --port 7860 \
      --data-dir "$DATA_ROOT" \
-     --no-half-vae \
-     --opt-sdp-attention \
-     --upcast-sampling \
-     --disable-nan-check \
+     $FORGE_ARGS \
      --skip-version-check
+     
