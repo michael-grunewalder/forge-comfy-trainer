@@ -19,4 +19,5 @@ COPY forge/start.sh /opt/start.sh
 RUN chmod +x /opt/start.sh
 
 EXPOSE 7860 8889
-CMD ["/bin/bash", "/opt/start.sh"]
+#CMD ["/bin/bash", "/opt/start.sh"]
+CMD ["/bin/bash", "-c", "/opt/start.sh || (echo 'Start script failed, opening shell'; exec /bin/bash)"]
