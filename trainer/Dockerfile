@@ -1,4 +1,4 @@
-FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-runtime-ubuntu22.04
+FROM pytorch/pytorch:2.4.0-cuda12.1-cudnn9-runtime
 #FROM nvidia/cuda:12.1.1-base-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
