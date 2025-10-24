@@ -1,21 +1,22 @@
 FROM nvidia/cuda:12.1.1-base-ubuntu22.04
 ENV DEBIAN_FRONTEND=noninteractive
-WORKDIR /workspace
+WORKDIR /opt
 
 RUN apt-get update && apt-get install -y \
     python3 python3-venv python3-pip git wget curl && \
     rm -rf /var/lib/apt/lists/*
 
-ENV APP_PATH=/workspace/Apps/Trainer \
+ENV APP_NAME=Trainer \
+    APP_PATH=/workspace/Apps/Trainer \
     PYTHON_PATH=/workspace/Python/Trainer \
     SHARED_MODELS=/workspace/Shared/models \
-    TOOLS_PATH=/workspace/tools
+    TOOLS_PATH=/workspace/tools \
+    START_JUPYTER=true
 
-RUN mkdir -p $APP_PATH $PYTHON_PATH $SHARED_MODELS $TOOLS_PATH
-
+# Copy shared tools and boot script
 COPY tools /workspace/tools
-COPY trainer/start.sh /workspace/Apps/Trainer/start.sh
-RUN chmod +x /workspace/Apps/Trainer/start.sh
+COPY trainer/start.sh /opt/start.sh
+RUN chmod +x /opt/start.sh
 
 EXPOSE 7861 8890
-CMD ["/workspace/Apps/Trainer/start.sh"]
+CMD ["/bin/bash", "/opt/start.sh"]
