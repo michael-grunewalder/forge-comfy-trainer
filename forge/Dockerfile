@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV APP_NAME=Forge \
     APP_PATH=/workspace/Apps/Forge \
     PY_PATH=/workspace/Python/Forge \
-    SHARED_MODELS=/workspace/Shared/modules \
+    SHARED_MODELS=/workspace/Shared/models \
     TOOLS_PATH=/workspace/tools \
     START_JUPYTER=true \
     # SDXL-Optimierte Argumente für Stabilität (gegen NaN- und OOM-Fehler):
