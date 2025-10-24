@@ -15,7 +15,6 @@ RUN apt-get update && apt-get install -y \
         timm \
         triton \
         xformers \
-        flash-attn \
         torchsde \
         open-clip-torch \
         opencv-python-headless \

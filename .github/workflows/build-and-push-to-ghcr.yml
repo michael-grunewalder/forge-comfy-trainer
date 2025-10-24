@@ -19,7 +19,7 @@ jobs:
 
     strategy:
       matrix:
-        service: [forge, comfyui, trainer]
+        service: [forge, comfyui]
 
     steps:
       - name: Checkout repository
