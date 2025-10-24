@@ -49,7 +49,7 @@ fi
 
 # 4) Launch (Forge expects boolean --listen; do NOT pass 0.0.0.0)
 # export MODEL_PATH="$SHARED_MODELS"
-# cd "$APP_PATH"
+cd "$APP_PATH"
 
 #log "Launching Forge on 7860… (first run may pip-install inside venv)"
 #exec python launch.py --listen --port 7860 \
@@ -66,4 +66,3 @@ exec python launch.py --listen --port 7860 \
      --no-half-vae \
      --precision full \
      --skip-version-check
-     
