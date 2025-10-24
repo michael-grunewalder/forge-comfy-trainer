@@ -8,7 +8,7 @@ err() { printf "\033[1;31m[ERROR]\033[0m %s\n" "$*"; }
 APP_NAME="${APP_NAME:-Forge}"
 APP_PATH="${APP_PATH:-/workspace/Apps/Forge}"
 PY_PATH="${PY_PATH:-/workspace/Python/Forge}"
-SHARED_MODELS="${SHARED_MODELS:-/workspace/Shared/models}"
+SHARED_MODELS="${SHARED_MODELS:-/workspace/Shared}"
 TOOLS_PATH="${TOOLS_PATH:-/workspace/tools}"
 JUPYTER_PORT="${JUPYTER_PORT:-8889}"
 START_JUPYTER="${START_JUPYTER:-true}"
