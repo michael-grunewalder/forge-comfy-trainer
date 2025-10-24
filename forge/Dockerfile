@@ -13,9 +13,6 @@ RUN apt-get update && apt-get install -y \
         transformers \
         sentencepiece \
         timm \
-        triton \
-        xformers \
-        torchsde \
         open-clip-torch \
         opencv-python-headless \
         pillow \
