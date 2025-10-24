@@ -4,7 +4,6 @@ WORKDIR /workspace
 
 RUN apt-get update && apt-get install -y \
     git wget unzip ffmpeg libgl1 libglib2.0-0 && \
-    RUN python -m pip debug --verbose && \
     pip install --upgrade pip wheel setuptools && \
     pip install \
         numpy \
