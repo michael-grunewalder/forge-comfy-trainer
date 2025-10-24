@@ -1,55 +1,61 @@
 #!/bin/bash
-set -euo pipefail
+set -Eeuo pipefail
 
-log() { printf "\033[1;33m[INFO]\033[0m %s\n" "$*"; }
-ok()  { printf "\033[1;32m[SUCCESS]\033[0m %s\n" "$*"; }
-err() { printf "\033[1;31m[ERROR]\033[0m %s\n" "$*"; }
-
-APP_NAME="${APP_NAME:-ComfyUI}"
-APP_PATH="${APP_PATH:-/workspace/Apps/ComfyUI}"
-PY_PATH="${PY_PATH:-/workspace/Python/ComfyUI}"
-SHARED_MODELS="${SHARED_MODELS:-/workspace/Shared/models}"
-TOOLS_PATH="${TOOLS_PATH:-/workspace/tools}"
+WORK=/workspace
+COMFY_DIR="$WORK/comfyui"
+PORT="${PORT:-8188}"
 JUPYTER_PORT="${JUPYTER_PORT:-8888}"
-START_JUPYTER="${START_JUPYTER:-true}"
+COMFY_REPO="https://github.com/comfyanonymous/ComfyUI"
+COMFY_MANAGER_REPO="https://github.com/ltdrdata/ComfyUI-Manager"
 
-mkdir -p "$TOOLS_PATH" "$APP_PATH" "$PY_PATH" "$SHARED_MODELS"
+mkdir -p "$WORK"
+cd "$WORK"
 
-# 1) Python venv
-if [[ ! -x "$PY_PATH/bin/python3" ]]; then
-  log "Creating Python venv at $PY_PATH…"
-  python3 -m venv "$PY_PATH"
-  source "$PY_PATH/bin/activate"
-  pip install --upgrade pip wheel jupyterlab
-  ok "Venv ready."
+# --- 1) Install ComfyUI persistently ---
+if [ ! -d "$COMFY_DIR" ]; then
+  echo "=== First run: cloning ComfyUI ==="
+  git clone "$COMFY_REPO" comfyui
+  cd comfyui
+  python -m venv venv
+  source venv/bin/activate
+  pip install --upgrade pip
+  pip install -r requirements.txt
 else
-  source "$PY_PATH/bin/activate"
-  ok "Using existing venv."
+  echo "=== ComfyUI already present ==="
+  cd comfyui
 fi
 
-# 2) App code
-if [[ ! -d "$APP_PATH/.git" ]]; then
-  log "Cloning ComfyUI into $APP_PATH…"
-  rm -rf "$APP_PATH"
-  git clone https://github.com/comfyanonymous/ComfyUI.git "$APP_PATH"
-  git clone https://github.com/ltdrdata/ComfyUI-Manager.git "$APP_PATH/custom_nodes/ComfyUI-Manager"
-  ok "ComfyUI installed."
+# --- 2) Ensure venv is usable ---
+if [ ! -f "venv/bin/activate" ]; then
+  echo "=== Recreating venv ==="
+  python -m venv venv
+  source venv/bin/activate
+  pip install --upgrade pip
+  pip install -r requirements.txt
 else
-  ok "Reusing ComfyUI repo."
+  source venv/bin/activate
 fi
 
-# 3) Jupyter (optional)
-if [[ "$START_JUPYTER" == "true" ]]; then
-  log "Starting JupyterLab on ${JUPYTER_PORT}…"
-  nohup jupyter lab --ip=0.0.0.0 --port="${JUPYTER_PORT}" \
-        --NotebookApp.token='' --NotebookApp.password='' --no-browser \
-        > /workspace/jupyter.log 2>&1 &
-else
-  log "Jupyter disabled (START_JUPYTER=false)."
+# --- 3) Install Comfy Manager (persistent) ---
+if [ ! -d "$COMFY_DIR/custom_nodes/ComfyUI-Manager" ]; then
+  echo "=== Installing ComfyUI Manager ==="
+  mkdir -p "$COMFY_DIR/custom_nodes"
+  git clone "$COMFY_MANAGER_REPO" "$COMFY_DIR/custom_nodes/ComfyUI-Manager"
 fi
 
-# 4) Launch
-export COMFYUI_MODELS_PATH="$SHARED_MODELS"
-cd "$APP_PATH"
-log "Launching ComfyUI on 8188…"
-exec python main.py --listen 0.0.0.0 --port 8188
+# --- 4) Link shared models directory ---
+mkdir -p "$WORK/models"
+if [ ! -L "$COMFY_DIR/models" ]; then
+  rm -rf "$COMFY_DIR/models" || true
+  ln -s "$WORK/models" "$COMFY_DIR/models"
+fi
+
+# --- 5) Optional: Start Jupyter ---
+if [ "${START_JUPYTER:-false}" = "true" ]; then
+  echo "=== Starting JupyterLab on ${JUPYTER_PORT} ==="
+  nohup jupyter lab --ip=0.0.0.0 --port="${JUPYTER_PORT}" --no-browser --NotebookApp.token='' --NotebookApp.password='' >/workspace/jupyter.log 2>&1 &
+fi
+
+# --- 6) Launch ComfyUI ---
+echo "=== Starting ComfyUI on port ${PORT} ==="
+exec python main.py --listen 0.0.0.0 --port "${PORT}"

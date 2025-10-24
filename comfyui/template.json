@@ -1,20 +1,19 @@
 {
-  "name": "ComfyUI + ComfyManager + Jupyter",
-  "description": "Lightweight ComfyUI setup with ComfyManager and JupyterLab preconfigured. Uses shared model storage at /workspace/Shared/models.",
-  "image": "ghcr.io/michael-grunewalder/comfyui:latest",
-  "port": 8188,
-  "startScript": "/workspace/Apps/ComfyUI/start.sh",
+  "displayName": "ComfyUI + Manager + Jupyter (Persistent)",
+  "imageName": "ghcr.io/michael-grunewalder/comfyui:latest",
+  "gpuCount": 1,
+  "ports": [
+    { "port": 8188, "protocol": "HTTP" },
+    { "port": 8888, "protocol": "HTTP" }
+  ],
   "volumeMounts": [
-    { "containerPath": "/workspace", "hostPath": "/workspace" }
+    {
+      "name": "network-storage",
+      "mountPath": "/workspace"
+    }
   ],
   "env": {
     "START_JUPYTER": "true"
   },
-  "ports": [
-    { "containerPort": 8188, "protocol": "http" },
-    { "containerPort": 8888, "protocol": "http" }
-  ],
-  "defaultVolumeSizeGb": 50,
-  "defaultGpu": "A6000",
-  "categories": ["ComfyUI", "AI Image Generation"]
+  "entrypoint": ["/start.sh"]
 }

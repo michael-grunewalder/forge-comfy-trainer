@@ -1,32 +1,30 @@
-FROM nvidia/cuda:12.1.1-base-ubuntu22.04
+FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-runtime-ubuntu22.04
 
-ENV DEBIAN_FRONTEND=noninteractive
-ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PYTHONUNBUFFERED=1
-WORKDIR /opt
+WORKDIR /workspace
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 python3-venv python3-pip \
-    git curl wget ca-certificates \
-    ffmpeg libgl1 libglib2.0-0 \
-    build-essential pkg-config \
-    net-tools iproute2 procps tini \
- && rm -rf /var/lib/apt/lists/*
+# system deps
+RUN apt-get update && apt-get install -y \
+    git wget unzip ffmpeg libgl1 libglib2.0-0 && \
+    pip install --upgrade pip wheel setuptools && \
+    pip install \
+        accelerate \
+        safetensors \
+        einops \
+        transformers \
+        sentencepiece \
+        timm \
+        triton \
+        xformers \
+        flash-attn \
+        torchsde \
+        open-clip-torch \
+        opencv-python-headless \
+        pillow \
+        tqdm && \
+    rm -rf /var/lib/apt/lists/*
 
-# WICHTIGE ANPASSUNGEN (SDXL-Optimierungen in FORGE_ARGS)
-ENV APP_NAME=Forge \
-    APP_PATH=/workspace/Apps/Forge \
-    PY_PATH=/workspace/Python/Forge \
-    SHARED_MODELS=/workspace/Shared/models \
-    TOOLS_PATH=/workspace/tools \
-    START_JUPYTER=true \
-    # SDXL-Optimierte Argumente für Stabilität (gegen NaN- und OOM-Fehler):
-    FORGE_ARGS="--medvram --no-half-vae --upcast-sampling --opt-sdp-attention --disable-nan-check"
+COPY start.sh /start.sh
+RUN chmod +x /start.sh
+EXPOSE 7860
 
-COPY tools /workspace/tools
-COPY forge/start.sh /opt/start.sh
-RUN chmod +x /opt/start.sh
-
-EXPOSE 7860 8889
-
-ENTRYPOINT ["/usr/bin/tini","-g","--"]
-CMD ["/bin/bash","/opt/start.sh"]
+ENTRYPOINT ["/start.sh"]
