@@ -52,5 +52,4 @@ export MODEL_PATH="$SHARED_MODELS"
 cd "$APP_PATH"
 
 log_info "Launching Forge on port 7860..."
-python launch.py --listen 0.0.0.0 --port 7860 \
-                 --data-dir "$SHARED_MODELS" --no-half-vae
+python launch.py --listen --port 7860 --data-dir "$SHARED_MODELS" --no-half-vae
