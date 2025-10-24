@@ -4,17 +4,18 @@ WORKDIR /workspace
 
 RUN apt-get update && apt-get install -y \
     git wget unzip ffmpeg libgl1 libglib2.0-0 && \
+    RUN python -m pip debug --verbose && \
     pip install --upgrade pip wheel setuptools && \
     pip install \
         numpy \
         pillow \
         tqdm \
         opencv-python-headless \
-        xformers \
-        triton \
-        torchsde \
         safetensors \
-        accelerate && \
+        accelerate==0.33.0 \
+        xformers==0.0.27 \
+        triton==3.0.0 \
+        torchsde==0.2.6 && \
     rm -rf /var/lib/apt/lists/*
 
 COPY start.sh /start.sh
