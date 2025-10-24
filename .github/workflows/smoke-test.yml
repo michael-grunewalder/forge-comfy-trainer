@@ -1,0 +1,49 @@
+name: Smoke-Test Built Images
+
+on:
+  workflow_run:
+    workflows: ["Build & Push All Images"]
+    types: [completed]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    strategy:
+      matrix:
+        service: [comfyui, forge, trainer]
+
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull latest image
+        run: |
+          docker pull ghcr.io/michael-grunewalder/${{ matrix.service }}:latest
+
+      - name: Run smoke test
+        run: |
+          echo "Testing ${{ matrix.service }}..."
+          cid=$(docker run -d --rm \
+              --platform linux/amd64 \
+              ghcr.io/michael-grunewalder/${{ matrix.service }}:latest)
+          
+          # give container some time to boot
+          sleep 120
+
+          echo "---- container logs ----"
+          docker logs $cid | tail -n 100 || true
+          
+          # basic check for “Running on” or “Launching”
+          docker logs $cid | grep -E "Running on|Launching" && ok=1 || ok=0
+          
+          docker stop $cid || true
+          if [ "$ok" != "1" ]; then
+            echo "::error::${{ matrix.service }} did not start correctly"
+            exit 1
+          fi

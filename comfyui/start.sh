@@ -1,54 +1,55 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-log_info()    { echo -e "\033[1;33m[INFO]\033[0m $1"; }
-log_success() { echo -e "\033[1;32m[SUCCESS]\033[0m $1"; }
-log_error()   { echo -e "\033[1;31m[ERROR]\033[0m $1"; }
+log() { printf "\033[1;33m[INFO]\033[0m %s\n" "$*"; }
+ok()  { printf "\033[1;32m[SUCCESS]\033[0m %s\n" "$*"; }
+err() { printf "\033[1;31m[ERROR]\033[0m %s\n" "$*"; }
 
-APP_NAME="ComfyUI"
-APP_PATH="/workspace/Apps/${APP_NAME}"
-PYTHON_PATH="/workspace/Python/${APP_NAME}"
-SHARED_MODELS="/workspace/Shared/models"
-TOOLS_PATH="/workspace/tools"
-JUPYTER_PORT=8888
-START_JUPYTER=${START_JUPYTER:-true}
+APP_NAME="${APP_NAME:-ComfyUI}"
+APP_PATH="${APP_PATH:-/workspace/Apps/ComfyUI}"
+PY_PATH="${PY_PATH:-/workspace/Python/ComfyUI}"
+SHARED_MODELS="${SHARED_MODELS:-/workspace/Shared/models}"
+TOOLS_PATH="${TOOLS_PATH:-/workspace/tools}"
+JUPYTER_PORT="${JUPYTER_PORT:-8888}"
+START_JUPYTER="${START_JUPYTER:-true}"
 
-mkdir -p "$TOOLS_PATH" "$APP_PATH" "$PYTHON_PATH" "$SHARED_MODELS"
+mkdir -p "$TOOLS_PATH" "$APP_PATH" "$PY_PATH" "$SHARED_MODELS"
 
-# ---------- 1. Python Environment Check ----------
-if [ ! -x "$PYTHON_PATH/bin/python3" ]; then
-  log_info "Python environment missing. Creating fresh venv..."
-  python3 -m venv "$PYTHON_PATH"
-  source "$PYTHON_PATH/bin/activate"
-  pip install --upgrade pip jupyterlab
-  log_success "Python environment created."
+# 1) Python venv
+if [[ ! -x "$PY_PATH/bin/python3" ]]; then
+  log "Creating Python venv at $PY_PATH…"
+  python3 -m venv "$PY_PATH"
+  source "$PY_PATH/bin/activate"
+  pip install --upgrade pip wheel jupyterlab
+  ok "Venv ready."
 else
-  source "$PYTHON_PATH/bin/activate"
-  log_success "Using existing Python environment."
+  source "$PY_PATH/bin/activate"
+  ok "Using existing venv."
 fi
 
-# ---------- 2. Application Code Check ----------
-if [ ! -d "$APP_PATH/.git" ]; then
-  log_info "App source not found in $APP_PATH. Cloning ComfyUI + Manager..."
+# 2) App code
+if [[ ! -d "$APP_PATH/.git" ]]; then
+  log "Cloning ComfyUI into $APP_PATH…"
   rm -rf "$APP_PATH"
   git clone https://github.com/comfyanonymous/ComfyUI.git "$APP_PATH"
   git clone https://github.com/ltdrdata/ComfyUI-Manager.git "$APP_PATH/custom_nodes/ComfyUI-Manager"
-  log_success "ComfyUI installed."
+  ok "ComfyUI installed."
 else
-  log_success "Reusing existing ComfyUI repository."
+  ok "Reusing ComfyUI repo."
 fi
 
-# ---------- 3. Optional Jupyter ----------
-if [ "$START_JUPYTER" = true ]; then
-  log_info "Starting JupyterLab on ${JUPYTER_PORT}..."
-  nohup jupyter lab --ip=0.0.0.0 --port=${JUPYTER_PORT} --NotebookApp.token='' --NotebookApp.password='' --no-browser > /workspace/jupyter.log 2>&1 &
+# 3) Jupyter (optional)
+if [[ "$START_JUPYTER" == "true" ]]; then
+  log "Starting JupyterLab on ${JUPYTER_PORT}…"
+  nohup jupyter lab --ip=0.0.0.0 --port="${JUPYTER_PORT}" \
+        --NotebookApp.token='' --NotebookApp.password='' --no-browser \
+        > /workspace/jupyter.log 2>&1 &
 else
-  log_info "Jupyter disabled (START_JUPYTER=false)."
+  log "Jupyter disabled (START_JUPYTER=false)."
 fi
 
-# ---------- 4. Launch Application ----------
+# 4) Launch
 export COMFYUI_MODELS_PATH="$SHARED_MODELS"
 cd "$APP_PATH"
-
-log_info "Launching ComfyUI on port 8188..."
-python main.py --listen 0.0.0.0 --port 8188
+log "Launching ComfyUI on 8188…"
+exec python main.py --listen 0.0.0.0 --port 8188
