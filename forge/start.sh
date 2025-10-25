@@ -1,6 +1,10 @@
 #!/bin/bash
 set -e
+echo "=== Disabling Forge root check ==="
+export COMMANDLINE_ARGS="--skip-root-check"
+
 cd /workspace
+
 
 # Persistent install of Forge
 if [ ! -d "/workspace/forge" ]; then
@@ -26,4 +30,4 @@ fi
 
 echo "=== Starting Forge on port 7860 ==="
 #exec ./webui.sh --listen 0.0.0.0 --port 7860 --skip-torch-cuda-test
-exec ./webui.sh --listen --port 7860 --skip-torch-cuda-test
+exec ./webui.sh --listen --port 7860 --skip-torch-cuda-test $COMMANDLINE_ARGS
